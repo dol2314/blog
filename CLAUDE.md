@@ -1,0 +1,14 @@
+# Claude Code setup
+
+## REA (Reverse Engineer Anything)
+
+This repo registers [REA](https://github.com/morluto/rea) for Claude Code:
+
+- `.mcp.json` — project-scoped MCP server `rea`, launched with `npx -y rea-agents@6.4.0 mcp` (stdio). Requires Node.js 22.19+ / 24.11+ / 26+.
+- `.claude/settings.json` — auto-approves the `rea` server from `.mcp.json`.
+- `.claude/skills/reverse-engineer-anything/` — REA's workflow skill, copied from morluto/rea@2f3dee3 (MIT, see LICENSE in that folder).
+
+Static JavaScript/Electron, archive, Go, PE resource and similar analyses work out of the box.
+Native decompilation needs Hopper, Ghidra or IDA installed on the host; see https://rea.tools/guides/native/.
+
+To upgrade, bump the version in `.mcp.json` and re-copy the skill from the matching REA release.
