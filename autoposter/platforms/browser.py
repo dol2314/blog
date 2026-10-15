@@ -53,6 +53,9 @@ class Browser:
                 break
             except Exception as exc:  # noqa: BLE001 - 다음 후보로 넘어간다
                 errors.append(str(exc).splitlines()[0])
+                _log(f"브라우저 실행 실패 {extra or '기본 크로미움'}: {errors[-1]}")
+        if self.context:
+            _log(f"브라우저 실행됨: {self.platform}")
         if not self.context:
             self.close()
             raise PlatformError(
@@ -138,3 +141,11 @@ def paste_html(locator, html: str, text: str) -> None:
     locator 요소(또는 그 안에서 포커스된 요소)에 붙여넣기 이벤트를 보낸다.
     """
     locator.evaluate(PASTE_HTML_JS, [html, text])
+
+
+def _log(message: str) -> None:
+    try:
+        from ..app.server import log
+    except Exception:  # noqa: BLE001 - 명령창 모드에서는 기록하지 않아도 된다
+        return
+    log(message)

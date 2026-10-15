@@ -248,3 +248,12 @@ textarea.input { resize: vertical; }
   .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .table .w-date, .table td:nth-child(7), .table th:nth-child(7) { display: none; }
 }
+
+.side-status { font-size: 13px; border-radius: 10px; padding: 10px 12px; background: #f4f6fa; color: #3a404c; line-height: 1.6; white-space: pre-line; word-break: break-all; }
+.side-status.running { display: flex; gap: 8px; align-items: flex-start; }
+.side-status.running .spinner { border-color: #dfe5f3; border-top-color: var(--primary); margin-top: 3px; }
+.side-status.error { background: #fdf0f0; color: #9b2c28; }
+.side-status.ok { background: var(--green-soft); color: #24683a; }
+.toast-row #toast-text { white-space: pre-line; flex: 1; }
+.toast-close { background: transparent; border: 0; color: rgba(255,255,255,.7); cursor: pointer; font-size: 13px; padding: 0 0 0 6px; align-self: flex-start; }
+.toast-close:hover { color: #fff; }

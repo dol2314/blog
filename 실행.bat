@@ -62,10 +62,23 @@ echo ok> .venv\browser.installed
 rem ---- 4. 실행 - 인자 없이 실행하면 창 화면, "실행.bat cli"처럼 인자를 주면 명령창 메뉴 ----
 :apikey
 :run
+if /i "%~1"=="debug" goto run_debug
 if not "%~1"=="" goto run_cli
 echo 프로그램 창을 여는 중...
 start "" "%APP%.venv\Scripts\pythonw.exe" -m autoposter.app
 exit /b 0
+
+:run_debug
+echo.
+echo [문제 확인 모드] 이 창을 닫지 말고 프로그램을 사용해 보세요.
+echo 문제가 생기면 이 창의 내용을 캡처해서 알려 주세요.
+echo.
+set AUTOPOSTER_DEBUG=1
+"%VPY%" -X faulthandler -m autoposter.app
+echo.
+echo 프로그램이 끝났습니다.
+pause
+exit /b
 
 :run_cli
 if /i "%~1"=="cli" shift

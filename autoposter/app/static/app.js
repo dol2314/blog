@@ -59,6 +59,7 @@ async function runJob(name, body, { lane, onProgress } = {}) {
     job = await api("POST", `/api/jobs/${name}`, body || {});
     let shownSeq = 0;
     showToast(job.message, { spin: true });
+    if (lane === "platform") setPlatStatus("running", job.message);
     while (job.state === "running" || job.state === "input") {
       if (job.state === "input" && job.prompt && job.prompt.seq !== shownSeq) {
         shownSeq = job.prompt.seq;
@@ -69,11 +70,25 @@ async function runJob(name, body, { lane, onProgress } = {}) {
       job = await api("GET", `/api/jobs/${job.id}`);
       if (job.state === "running") {
         showToast(job.message, { spin: true, progress: job.progress });
+        if (lane === "platform") {
+          let text = `${job.message} (${Math.round(job.elapsed || 0)}초)`;
+          if (job.elapsed > 25 && job.kind === "login") {
+            text += "\n브라우저 창이 다른 창 뒤에 열렸을 수 있습니다. 작업 표시줄을 확인해 주세요.";
+          }
+          setPlatStatus("running", text);
+        }
         if (onProgress) onProgress(job);
       }
     }
-    if (job.state === "error") throw new Error(job.error);
+    if (job.state === "error") {
+      if (lane === "platform") setPlatStatus("error", job.error);
+      throw new Error(job.error);
+    }
+    if (lane === "platform") setPlatStatus("", "");
     return job.result;
+  } catch (e) {
+    if (lane === "platform" && !job) setPlatStatus("error", e.message || String(e));
+    throw e;
   } finally {
     S.busy[lane] = false;
     renderBusy();
@@ -106,7 +121,14 @@ function showToast(text, { spin = false, progress = null, kind = "", hideAfter =
   if (hideAfter) toastTimer = setTimeout(() => (t.hidden = true), hideAfter);
 }
 const toastOk = (text) => showToast(text, { kind: "ok", hideAfter: 3500 });
-const toastError = (err) => showToast(err.message || String(err), { kind: "error", hideAfter: 9000 });
+const toastError = (err) => showToast(err.message || String(err), { kind: "error" }); // 오류는 닫을 때까지 남긴다
+
+function setPlatStatus(kind, text) {
+  const box = $("plat-status");
+  box.hidden = !text;
+  box.className = `side-status ${kind}`;
+  box.innerHTML = kind === "running" ? `<span class="spinner"></span><span>${esc(text)}</span>` : esc(text);
+}
 
 function showModal({ title, text, input = false, secret = false, value = "", ok = "확인", cancel = "취소" }) {
   return new Promise((resolve) => {
@@ -492,6 +514,7 @@ async function switchPlatform(key) {
   try {
     S.data = await api("POST", "/api/platform", { key });
     S.verified = false;
+    setPlatStatus("", "");
     render();
   } catch (e) {
     toastError(e);
@@ -504,6 +527,7 @@ async function login() {
     S.verified = true;
     await refresh();
     toastOk(`접속 완료 · 카테고리 ${cats.length}개를 불러왔습니다`);
+    setPlatStatus("ok", `접속 완료 · 카테고리 ${cats.length}개`);
   } catch (e) {
     toastError(e);
   }
@@ -515,6 +539,7 @@ async function loadCategories() {
     S.verified = true;
     await refresh();
     toastOk(`카테고리 ${cats.length}개를 불러왔습니다`);
+    setPlatStatus("ok", `카테고리 ${cats.length}개를 불러왔습니다`);
   } catch (e) {
     toastError(e);
   }
@@ -631,6 +656,7 @@ async function importFile(file) {
 }
 
 function bind() {
+  $("toast-close").onclick = () => ($("toast").hidden = true);
   $("login-btn").onclick = login;
   $("cat-btn").onclick = loadCategories;
   $("write-btn").onclick = writePost;

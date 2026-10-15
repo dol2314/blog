@@ -53,9 +53,12 @@ class Job:
         self.error: str | None = None
         self._answer = queue.Queue()
         self._seq = 0
+        self.started = time.time()
 
     def to_json(self) -> dict:
-        return {k: getattr(self, k) for k in ("id", "kind", "state", "message", "progress", "prompt", "result", "error")}
+        data = {k: getattr(self, k) for k in ("id", "kind", "state", "message", "progress", "prompt", "result", "error")}
+        data["elapsed"] = round(time.time() - self.started, 1)
+        return data
 
     def update(self, message: str | None = None, progress: float | None = None):
         if message is not None:
@@ -185,7 +188,10 @@ class App:
         job = Job(kind, message)
         self.jobs[job.id] = job
 
+        log(f"작업 시작: {kind} ({job.id})")
+
         def run():
+            job.started = time.time()  # 앞 작업을 기다린 시간은 빼고 잰다
             try:
                 job.result = fn(job)
                 job.state = "done"
@@ -197,8 +203,9 @@ class App:
             except Exception as exc:  # noqa: BLE001
                 log_error(exc)
                 job.state = "error"
-                job.error = f"예상하지 못한 오류: {type(exc).__name__}: {exc}\n(자세한 내용: {config.HOME / 'error.log'})"
+                job.error = friendly_error(exc)
             job.progress = None
+            log(f"작업 끝: {kind} ({job.id}) {job.state} {time.time() - job.started:.1f}초 {job.error or ''}")
 
         runner.submit(run)
         return job
@@ -337,7 +344,38 @@ def _category_json(c: Category) -> dict:
     return {"id": c.id, "name": c.name, "parent": c.parent, "label": c.label}
 
 
+def log(message: str):
+    """작업 기록 (~/.blog-autoposter/app.log). 문제를 찾을 때 이 파일을 본다."""
+    line = time.strftime("[%Y-%m-%d %H:%M:%S] ") + message
+    if os.environ.get("AUTOPOSTER_DEBUG"):
+        print(line, flush=True)
+    try:
+        config.HOME.mkdir(parents=True, exist_ok=True)
+        path = config.HOME / "app.log"
+        if path.exists() and path.stat().st_size > 2_000_000:
+            path.replace(path.with_suffix(".old.log"))
+        with open(path, "a", encoding="utf-8") as fh:
+            fh.write(line + "\n")
+    except OSError:
+        pass
+
+
+def friendly_error(exc: BaseException) -> str:
+    text = str(exc).splitlines()[0] if str(exc) else type(exc).__name__
+    name = type(exc).__name__
+    if "Timeout" in name:
+        hint = "화면이 제때 열리지 않았습니다. 인터넷 연결을 확인하고 다시 시도해 주세요."
+    elif "net::ERR" in text:
+        hint = "사이트에 연결하지 못했습니다. 인터넷 연결, 백신·보안 프로그램, 프록시 설정을 확인해 주세요."
+    elif "Executable doesn't exist" in text or "playwright install" in text:
+        hint = "자동 조작용 브라우저가 없습니다. .venv 폴더를 지우고 실행.bat을 다시 실행해 주세요."
+    else:
+        hint = "예상하지 못한 오류가 났습니다."
+    return f"{hint}\n({name}: {text})\n자세한 기록: {config.HOME / 'error.log'}"
+
+
 def log_error(exc: BaseException):
+    log(f"오류: {type(exc).__name__}: {exc}")
     try:
         config.HOME.mkdir(parents=True, exist_ok=True)
         with open(config.HOME / "error.log", "a", encoding="utf-8") as fh:
@@ -404,6 +442,8 @@ def make_handler(app: App):
             self._api("POST", path, body)
 
         def _api(self, method: str, path: str, body: dict):
+            if os.environ.get("AUTOPOSTER_DEBUG") and not path.startswith(("/api/jobs/", "/api/ping", "/api/ai")):
+                log(f"요청: {method} {path}")
             try:
                 result = route(app, method, path, body)
             except (PlatformError, WriterError) as exc:

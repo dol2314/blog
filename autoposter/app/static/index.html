@@ -33,6 +33,7 @@
           <button class="btn btn-light grow" id="login-btn">접속하기</button>
           <button class="btn btn-light grow" id="cat-btn">카테고리 불러오기</button>
         </div>
+        <div class="side-status" id="plat-status" hidden></div>
       </section>
 
       <section class="side-section">
@@ -176,7 +177,8 @@
 
 <!-- 진행 상황 -->
 <div class="toast" id="toast" hidden>
-  <div class="toast-row"><span class="spinner" id="toast-spin"></span><span id="toast-text"></span></div>
+  <div class="toast-row"><span class="spinner" id="toast-spin"></span><span id="toast-text"></span>
+    <button class="toast-close" id="toast-close" aria-label="닫기">✕</button></div>
   <div class="bar" id="toast-bar" hidden><div id="toast-fill"></div></div>
 </div>
 
