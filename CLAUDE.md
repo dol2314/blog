@@ -1,5 +1,9 @@
 # Claude Code setup
 
+## Blog autoposter
+
+`autoposter/` is a Python CLI (`python -m autoposter`) that uploads posts to WordPress (REST API), Naver Blog and Tistory (Playwright browser automation). Naver/Tistory selectors live in the `SELECTORS` dict at the top of each platform module. Run tests with `python -m pytest`; browser tests need Chromium (set `AUTOPOSTER_BROWSER_PATH`, e.g. `/opt/pw-browsers/chromium` in cloud sessions). User-facing text is Korean.
+
 ## REA (Reverse Engineer Anything)
 
 This repo registers [REA](https://github.com/morluto/rea) for Claude Code:
