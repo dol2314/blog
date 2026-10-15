@@ -28,8 +28,8 @@ SELECTORS = {
         "[class*='se-section-text'] [contenteditable]",
     ],
     "body_container": [".se-main-container", ".se-content"],
-    "save_button": ["button[class*='save_btn']", "button:has-text('저장')"],
-    "publish_button": ["button[class*='publish_btn']", "button:has-text('발행')"],
+    "save_button": ["button[class*='save_btn']", ":is(button, a, [role='button']):text-is('저장')", "text=저장"],
+    "publish_button": ["button[class*='publish_btn']", ":is(button, a, [role='button']):text-is('발행')"],
     "category_button": ["button[class*='selectbox_button']", "[class*='category'] button"],
     "category_options": ["[class*='option_list'] [class*='text']", "[class*='option_list'] label"],
     "tag_input": ["input[class*='tag_input']", "#tag-input", "input[placeholder*='태그']"],
@@ -93,9 +93,9 @@ class NaverBlog(Platform):
     def _categories_from_editor(self) -> list[Category]:
         """API가 안 될 때: 글쓰기 화면의 발행 창에서 카테고리 목록을 읽는다."""
         scope = self._open_editor()
-        first_visible(scope, SELECTORS["publish_button"]).click()
-        first_visible(scope, SELECTORS["category_button"]).click()
-        first_visible(scope, SELECTORS["category_options"])
+        first_visible(scope, SELECTORS["publish_button"], what="발행 버튼").click()
+        first_visible(scope, SELECTORS["category_button"], what="카테고리 버튼").click()
+        first_visible(scope, SELECTORS["category_options"], what="카테고리 목록")
         names = [t.strip() for t in scope.locator(", ".join(SELECTORS["category_options"])).all_inner_texts()]
         return [Category(id=name, name=name) for name in dict.fromkeys(n for n in names if n)]
 
@@ -105,12 +105,12 @@ class NaverBlog(Platform):
         scope = self._open_editor()
         page = self.browser.page()
 
-        first_visible(scope, SELECTORS["title"]).click()
+        first_visible(scope, SELECTORS["title"], what="제목 입력칸").click()
         page.keyboard.type(post.title)
 
-        body = first_visible(scope, SELECTORS["body"])
+        body = first_visible(scope, SELECTORS["body"], what="본문 입력칸")
         body.click()
-        container = first_visible(scope, SELECTORS["body_container"])
+        container = first_visible(scope, SELECTORS["body_container"], what="본문 영역")
         before = len(container.inner_text())
         paste_html(body, post.html, _html_to_text(post.html))
         time.sleep(1)
@@ -121,18 +121,18 @@ class NaverBlog(Platform):
                 page.keyboard.press("Enter")
 
         if draft:
-            first_visible(scope, SELECTORS["save_button"]).click()
+            first_visible(scope, SELECTORS["save_button"], what="저장 버튼").click()
             time.sleep(2)
             return PublishResult(url=None, draft=True)
 
-        first_visible(scope, SELECTORS["publish_button"]).click()
+        first_visible(scope, SELECTORS["publish_button"], what="발행 버튼").click()
         self._select_category(scope, category)
         if post.tags:
-            tag_input = first_visible(scope, SELECTORS["tag_input"])
+            tag_input = first_visible(scope, SELECTORS["tag_input"], what="태그 입력칸")
             for tag in post.tags[:30]:
                 tag_input.fill(tag.lstrip("#"))
                 tag_input.press("Enter")
-        first_visible(scope, SELECTORS["confirm_button"]).click()
+        first_visible(scope, SELECTORS["confirm_button"], what="발행 확인 버튼").click()
         return PublishResult(url=self._wait_for_post_url(), draft=False)
 
     def _open_editor(self):
@@ -143,15 +143,15 @@ class NaverBlog(Platform):
             raise PlatformError("네이버 로그인이 풀렸습니다. 다시 접속(login)해 주세요.")
         # 예전 주소 형태로 열리면 편집기가 mainFrame 안에 들어 있다.
         scope = page.frame(name="mainFrame") or page.main_frame
-        first_visible(scope, SELECTORS["title"], timeout_ms=30_000)
+        first_visible(scope, SELECTORS["title"], timeout_ms=30_000, what="제목 입력칸")
         click_if_visible(scope, SELECTORS["popup_cancel"])
         click_if_visible(scope, SELECTORS["help_close"])
         return scope
 
     def _select_category(self, scope, category: Category) -> None:
-        first_visible(scope, SELECTORS["category_button"]).click()
+        first_visible(scope, SELECTORS["category_button"], what="카테고리 버튼").click()
         options = scope.locator(", ".join(SELECTORS["category_options"]))
-        first_visible(scope, SELECTORS["category_options"])
+        first_visible(scope, SELECTORS["category_options"], what="카테고리 목록")
         exact = re.compile(rf"^\s*{re.escape(category.name)}\s*$")
         match = options.filter(has_text=exact).first
         if match.count() == 0:

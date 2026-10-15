@@ -95,18 +95,69 @@ def manual_login(browser: Browser, login_url: str, prompt, check) -> None:
     raise PlatformError("로그인을 확인하지 못했습니다.")
 
 
-def first_visible(scope, selectors: Iterable[str], timeout_ms: int = DEFAULT_TIMEOUT_MS):
+def first_visible(scope, selectors: Iterable[str], timeout_ms: int = DEFAULT_TIMEOUT_MS, what: str | None = None):
     """여러 후보 선택자 중 먼저 화면에 보이는 요소를 돌려준다.
 
     네이버·티스토리 화면은 예고 없이 바뀌므로, 선택자는 항상 여러 개를 후보로 둔다.
+    CSS 선택자뿐 아니라 'text=임시저장' 같은 글자 기준 선택자도 쓸 수 있다.
+    찾지 못하면 그 순간의 화면 사진과 버튼 목록을 저장해 원인을 찾을 수 있게 한다.
     """
     selectors = list(selectors)
-    combined = scope.locator(", ".join(selectors)).first
+    locator = scope.locator(selectors[0])
+    for selector in selectors[1:]:
+        locator = locator.or_(scope.locator(selector))
+    locator = locator.first
     try:
-        combined.wait_for(state="visible", timeout=timeout_ms)
+        locator.wait_for(state="visible", timeout=timeout_ms)
     except Exception as exc:  # noqa: BLE001
-        raise PlatformError(f"화면에서 요소를 찾지 못했습니다: {selectors}") from exc
-    return combined
+        saved = dump_screen(scope, what or selectors[0])
+        name = f"'{what}'" if what else "필요한 요소"
+        message = f"화면에서 {name}을(를) 찾지 못했습니다. 사이트 화면이 바뀌었을 수 있습니다."
+        if saved:
+            message += f"\n화면 기록을 저장했습니다: {saved}"
+        _log(f"요소 찾기 실패: {what} {selectors}")
+        raise PlatformError(message) from exc
+    return locator
+
+
+DUMP_JS = """
+() => {
+  const items = [];
+  for (const el of document.querySelectorAll('button, a, input, textarea, select, [role=button], [contenteditable=true]')) {
+    const r = el.getBoundingClientRect();
+    if (!r.width || !r.height) continue;
+    const text = (el.innerText || el.value || el.placeholder || el.getAttribute('aria-label') || '').trim().replace(/\\s+/g, ' ');
+    items.push(`${el.tagName.toLowerCase()}#${el.id || ''}.${String(el.className || '').trim().replace(/\\s+/g, '.')} "${text.slice(0, 40)}"`);
+  }
+  return items.slice(0, 300).join('\\n');
+}
+"""
+
+
+def dump_screen(scope, label: str) -> str | None:
+    """오류가 난 순간의 화면 사진(png)과 버튼 목록(txt)을 ~/.blog-autoposter/debug에 남긴다."""
+    try:
+        import time as _time
+
+        page = scope if hasattr(scope, "screenshot") else scope.page
+        folder = config.HOME / "debug"
+        folder.mkdir(parents=True, exist_ok=True)
+        stamp = _time.strftime("%Y%m%d-%H%M%S")
+        safe = "".join(c if c.isalnum() else "_" for c in label)[:30]
+        base = folder / f"{stamp}-{safe}"
+        page.screenshot(path=str(base.with_suffix(".png")), full_page=True)
+        lines = [f"주소: {page.url}", ""]
+        for frame in page.frames:
+            try:
+                found = frame.evaluate(DUMP_JS)
+            except Exception:  # noqa: BLE001
+                continue
+            if found:
+                lines += [f"[frame] {frame.url}", found, ""]
+        base.with_suffix(".txt").write_text("\n".join(lines), encoding="utf-8")
+        return str(base.with_suffix(".png"))
+    except Exception:  # noqa: BLE001 - 기록은 부가 기능이라 실패해도 원래 오류를 보여 준다
+        return None
 
 
 def click_if_visible(scope, selectors: Iterable[str], timeout_ms: int = 1_500) -> bool:

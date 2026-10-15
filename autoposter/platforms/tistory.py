@@ -21,10 +21,23 @@ SELECTORS = {
     "category_button": ["#category-btn", "button:has-text('카테고리')"],
     "category_options": ["#category-list .mce-menu-item", "#category-list [role='option']"],
     "tag_input": ["#tagText", "input[placeholder*='태그']"],
-    "draft_button": ["button.btn-draft", "button:has-text('임시저장')"],
-    "publish_layer_button": ["#publish-layer-btn", "button:has-text('완료')"],
+    "draft_button": [
+        "button.btn-draft",
+        "a.btn-draft",
+        ":is(button, a, [role='button']):has-text('임시저장')",
+        "text=임시저장",
+    ],
+    "publish_layer_button": [
+        "#publish-layer-btn",
+        ":is(button, a, [role='button']):text-is('완료')",
+        "text=완료",
+    ],
     "public_radio": ["#open20", "label:has-text('공개'):not(:has-text('비공개'))"],
-    "publish_button": ["#publish-btn", "button:has-text('발행')"],
+    "publish_button": [
+        "#publish-btn",
+        ":is(button, a, [role='button']):has-text('공개 발행')",
+        ":is(button, a, [role='button']):has-text('발행')",
+    ],
 }
 
 SET_CONTENT_JS = """
@@ -69,8 +82,8 @@ class Tistory(Platform):
 
     def get_categories(self) -> list[Category]:
         page = self._open_editor()
-        first_visible(page, SELECTORS["category_button"]).click()
-        first_visible(page, SELECTORS["category_options"])
+        first_visible(page, SELECTORS["category_button"], what="카테고리 버튼").click()
+        first_visible(page, SELECTORS["category_options"], what="카테고리 목록")
         texts = page.locator(", ".join(SELECTORS["category_options"])).all_inner_texts()
         page.keyboard.press("Escape")
         return parse_category_texts(texts)
@@ -80,24 +93,24 @@ class Tistory(Platform):
     def publish(self, post: Post, category: Category, draft: bool = False) -> PublishResult:
         page = self._open_editor()
 
-        first_visible(page, SELECTORS["title"]).fill(post.title)
+        first_visible(page, SELECTORS["title"], what="제목 입력칸").fill(post.title)
         self._set_body(page, post.html)
         self._select_category(page, category)
 
         if post.tags:
-            tag_input = first_visible(page, SELECTORS["tag_input"])
+            tag_input = first_visible(page, SELECTORS["tag_input"], what="태그 입력칸")
             for tag in post.tags[:10]:  # 티스토리는 태그 10개 제한
                 tag_input.fill(tag.lstrip("#"))
                 tag_input.press("Enter")
 
         if draft:
-            first_visible(page, SELECTORS["draft_button"]).click()
+            first_visible(page, SELECTORS["draft_button"], what="임시저장 버튼").click()
             time.sleep(2)
             return PublishResult(url=None, draft=True)
 
-        first_visible(page, SELECTORS["publish_layer_button"]).click()
+        first_visible(page, SELECTORS["publish_layer_button"], what="완료 버튼").click()
         click_if_visible(page, SELECTORS["public_radio"], timeout_ms=3_000)
-        first_visible(page, SELECTORS["publish_button"]).click()
+        first_visible(page, SELECTORS["publish_button"], what="발행 버튼").click()
         try:
             page.wait_for_url(lambda url: "newpost" not in url, timeout=30_000)
         except Exception as exc:  # noqa: BLE001
@@ -111,11 +124,11 @@ class Tistory(Platform):
         page.wait_for_load_state("domcontentloaded")
         if "auth/login" in page.url or "accounts.kakao.com" in page.url:
             raise PlatformError("티스토리 로그인이 풀렸습니다. 다시 접속(login)해 주세요.")
-        first_visible(page, SELECTORS["title"], timeout_ms=30_000)
+        first_visible(page, SELECTORS["title"], timeout_ms=30_000, what="글쓰기 화면")
         return page
 
     def _set_body(self, page, html: str) -> None:
-        first_visible(page, SELECTORS["editor_iframe"], timeout_ms=30_000)
+        first_visible(page, SELECTORS["editor_iframe"], timeout_ms=30_000, what="본문 편집기")
         if page.evaluate(SET_CONTENT_JS, html):
             return
         # 편집기 객체를 못 찾으면 본문 영역에 붙여넣는다.
@@ -125,8 +138,8 @@ class Tistory(Platform):
         paste_html(body, html, re.sub(r"<[^>]+>", "", html))
 
     def _select_category(self, page, category: Category) -> None:
-        first_visible(page, SELECTORS["category_button"]).click()
-        first_visible(page, SELECTORS["category_options"])
+        first_visible(page, SELECTORS["category_button"], what="카테고리 버튼").click()
+        first_visible(page, SELECTORS["category_options"], what="카테고리 목록")
         exact = re.compile(rf"^[\s\-]*{re.escape(category.name)}\s*$")
         match = page.locator(", ".join(SELECTORS["category_options"])).filter(has_text=exact).first
         if match.count() == 0:

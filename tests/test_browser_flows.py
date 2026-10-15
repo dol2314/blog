@@ -136,3 +136,38 @@ def test_tistory_flow(browser):
     assert result.url == "https://myblog.tistory.com/entry/first-post"
     saved = read_saved_post(browser.page())
     assert saved == {"title": "파이썬 팁", "body": "<p>내용</p>", "cat": "파이썬", "tags": ["파이썬"], "open": True}
+
+
+def test_tistory_draft_button_found_by_text(browser):
+    # 실제 티스토리처럼 임시저장이 button.btn-draft가 아닌 다른 요소일 때도 글자로 찾는다
+    editor = TISTORY_EDITOR.replace(
+        '<button class="btn-draft" onclick="window.drafted = true">임시저장</button>',
+        '<a href="#" class="action" onclick="window.drafted = true; return false;"><span>임시저장</span><span>3</span></a>',
+    )
+    ctx = browser.start()
+    ctx.route("https://myblog.tistory.com/manage/newpost/**", lambda r: fulfill(r, editor))
+    tistory = Tistory({"blog_name": "myblog"}, browser=browser)
+    result = tistory.publish(Post("임시 글", "<p>내용</p>"), Category("개발", "개발"), draft=True)
+    assert result.draft and browser.page().evaluate("window.drafted") is True
+
+
+def test_missing_element_saves_screen_record(browser, tmp_home):
+    from autoposter.platforms.base import PlatformError
+
+    editor = TISTORY_EDITOR.replace('<button class="btn-draft" onclick="window.drafted = true">임시저장</button>', "")
+    ctx = browser.start()
+    ctx.route("https://myblog.tistory.com/manage/newpost/**", lambda r: fulfill(r, editor))
+    tistory = Tistory({"blog_name": "myblog"}, browser=browser)
+    import autoposter.platforms.browser as browser_mod
+
+    browser_mod.DEFAULT_TIMEOUT_MS, old = 1500, browser_mod.DEFAULT_TIMEOUT_MS
+    try:
+        with pytest.raises(PlatformError, match="임시저장 버튼") as info:
+            tistory.publish(Post("임시 글", "<p>내용</p>"), Category("개발", "개발"), draft=True)
+    finally:
+        browser_mod.DEFAULT_TIMEOUT_MS = old
+    pngs = list((tmp_home / "debug").glob("*.png"))
+    txts = list((tmp_home / "debug").glob("*.txt"))
+    assert pngs and txts and str(pngs[0]) in str(info.value)
+    listing = txts[0].read_text(encoding="utf-8")
+    assert "publish-layer-btn" in listing and '"완료"' in listing
