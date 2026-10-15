@@ -1,7 +1,11 @@
 @echo off
 chcp 65001 >nul
 setlocal
-cd /d "%~dp0"
+set "APP=%~dp0"
+pushd "%APP%" >nul 2>&1
+if errorlevel 1 goto bad_folder
+if not exist "%APP%requirements.txt" goto missing_files
+if not exist "%APP%autoposter\__main__.py" goto missing_files
 set PYTHONUTF8=1
 set PYTHONIOENCODING=utf-8
 title 블로그 자동 업로드
@@ -9,6 +13,7 @@ title 블로그 자동 업로드
 echo ============================================
 echo   블로그 자동 업로드 프로그램
 echo ============================================
+echo 프로그램 폴더: %APP%
 echo.
 
 if exist ".venv\Scripts\python.exe" goto install
@@ -34,13 +39,13 @@ if errorlevel 1 goto fail
 rem ---- 2. 부품 설치 - requirements.txt가 바뀌었을 때만 다시 설치 ----
 :install
 set "VPY=.venv\Scripts\python.exe"
-fc /b requirements.txt .venv\requirements.installed >nul 2>&1
+fc /b "%APP%requirements.txt" .venv\requirements.installed >nul 2>&1
 if not errorlevel 1 goto browser
 echo [2/3] 필요한 부품을 설치하는 중... 처음 한 번만 몇 분 걸립니다.
 "%VPY%" -m pip install --upgrade pip >nul 2>&1
-"%VPY%" -m pip install -r requirements.txt
+"%VPY%" -m pip install -r "%APP%requirements.txt"
 if errorlevel 1 goto fail
-copy /y requirements.txt .venv\requirements.installed >nul
+copy /y "%APP%requirements.txt" .venv\requirements.installed >nul
 
 rem ---- 3. 브라우저 - 크롬이 있으면 크롬을 쓰고, 없으면 내려받기 ----
 :browser
@@ -73,6 +78,25 @@ echo.
 echo.
 pause
 exit /b
+
+:missing_files
+echo [오류] 프로그램 파일이 이 폴더에 없습니다.
+echo 실행.bat 파일 하나만 있으면 안 되고, 받은 zip의 압축을 모두 푼 폴더 안에서 실행해야 합니다.
+echo  1. 받은 zip 파일을 마우스 오른쪽 클릭 - "압축 풀기" 또는 "모두 압축 풀기"
+echo  2. 압축이 풀린 폴더 안의 실행.bat을 더블클릭
+echo zip 파일을 연 상태에서 바로 실행하면 이 오류가 납니다.
+echo.
+echo 지금 실행된 위치: %APP%
+echo.
+pause
+exit /b 1
+
+:bad_folder
+echo [오류] 프로그램 폴더에 들어갈 수 없습니다: %APP%
+echo 압축을 푼 폴더를 바탕화면이나 문서 폴더처럼 접근할 수 있는 곳으로 옮긴 뒤 다시 실행해 주세요.
+echo.
+pause
+exit /b 1
 
 :fail
 echo.
