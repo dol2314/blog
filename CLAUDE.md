@@ -2,7 +2,7 @@
 
 ## Blog autoposter
 
-`autoposter/` is a Python CLI (`python -m autoposter`) that uploads posts to WordPress (REST API), Naver Blog and Tistory (Playwright browser automation). Naver/Tistory selectors live in the `SELECTORS` dict at the top of each platform module. Run tests with `python -m pytest`; browser tests need Chromium (set `AUTOPOSTER_BROWSER_PATH`, e.g. `/opt/pw-browsers/chromium` in cloud sessions). User-facing text is Korean.
+`autoposter/` is a Python CLI (`python -m autoposter`) that uploads posts to WordPress (REST API), Naver Blog and Tistory (Playwright browser automation). Naver/Tistory selectors live in the `SELECTORS` dict at the top of each platform module. The Tkinter GUI is `autoposter/gui.py` (`python -m autoposter.gui`, launched by `실행.bat`); platform objects are only touched on its single worker thread because Playwright's sync API is thread-bound. GUI tests need tkinter and a display (`xvfb-run`). Run tests with `python -m pytest`; browser tests need Chromium (set `AUTOPOSTER_BROWSER_PATH`, e.g. `/opt/pw-browsers/chromium` in cloud sessions). User-facing text is Korean.
 
 ## REA (Reverse Engineer Anything)
 

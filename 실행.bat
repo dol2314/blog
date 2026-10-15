@@ -59,25 +59,31 @@ if errorlevel 1 goto fail
 :browser_done
 echo ok> .venv\browser.installed
 
-rem ---- 4. Claude API 키 - AI 글쓰기에만 필요 ----
+rem ---- 4. 실행 - 인자 없이 실행하면 창 화면, "실행.bat cli"처럼 인자를 주면 명령창 메뉴 ----
 :apikey
-if defined ANTHROPIC_API_KEY goto run
-if exist api_key.txt set /p ANTHROPIC_API_KEY=<api_key.txt
-if defined ANTHROPIC_API_KEY goto run
-echo.
-echo AI 글쓰기를 쓰려면 Claude API 키가 필요합니다: https://console.anthropic.com
-echo 키가 없으면 그냥 Enter를 누르세요. 내가 쓴 파일 올리기는 키 없이 됩니다.
-set /p "ANTHROPIC_API_KEY=API 키: "
-if not defined ANTHROPIC_API_KEY goto run
-echo %ANTHROPIC_API_KEY%> api_key.txt
-echo 키를 api_key.txt에 저장했습니다. 다음부터는 묻지 않습니다.
-
 :run
+if not "%~1"=="" goto run_cli
+"%VPY%" -c "import tkinter" >nul 2>&1
+if errorlevel 1 goto no_tk
+echo 프로그램 창을 여는 중...
+start "" "%APP%.venv\Scripts\pythonw.exe" -m autoposter.gui
+exit /b 0
+
+:run_cli
+if /i "%~1"=="cli" shift
 echo.
-"%VPY%" -m autoposter %*
+"%VPY%" -m autoposter %1 %2 %3 %4 %5 %6 %7 %8 %9
 echo.
 pause
 exit /b
+
+:no_tk
+echo [오류] 창 화면에 필요한 tkinter가 이 파이썬에 없습니다.
+echo 파이썬 설치 파일을 다시 실행해 Modify를 누르고 "tcl/tk and IDLE"을 체크해 주세요.
+echo 그동안은 명령창 메뉴로 쓸 수 있습니다: 실행.bat cli
+echo.
+pause
+exit /b 1
 
 :missing_files
 echo [오류] 프로그램 파일이 이 폴더에 없습니다.
