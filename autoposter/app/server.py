@@ -22,7 +22,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
-from .. import config, factcheck, local_ai, style, web
+from .. import config, factcheck, formula, keywords, local_ai, style, web
 from ..cli import PLATFORMS, _has_target, open_platform, parse_tags, post_from_text
 from ..models import Category, Post
 from ..platforms.base import PlatformError
@@ -132,6 +132,9 @@ class App:
         self.platform_factory = platform_factory or open_platform
         self.writers = writers or {"local": local_ai.write_post_local, "claude": write_post}
         self.refiner = style.refine
+        self.formula_writer = formula.write
+        self.keyword_collector = keywords.collect
+        self.app_finder = keywords.find_apps
         self.style_analyzer = style.analyze
         self.fact_checker = lambda engine, post, refs, progress: factcheck.run(
             engine, post, refs, progress, fetch=self.fetch
@@ -176,6 +179,9 @@ class App:
             "style": self.cfg.get("style") or {},
             "refine_enabled": bool(self.cfg.get("refine_enabled")),
             "factcheck_auto": bool(self.cfg.get("factcheck_auto")),
+            "write_mode": self.cfg.get("write_mode", "basic"),
+            "formula_color": self.cfg.get("formula_color", "coral"),
+            "palette": {k: {"c1": v[0], "c2": v[1], "note": v[2]} for k, v in formula.PALETTE.items()},
             "posts": self.store.all(),
         }
 
@@ -275,7 +281,12 @@ class App:
         c = post["category"]
         category = Category(id=c["id"], name=c["name"], parent=c.get("parent"))
         job.update(f"{PLATFORMS[self.platform_key][0]}에 {'임시저장' if draft else '발행'}하는 중...")
-        result = self.platform.publish(Post(post["title"], post["html"], post["tags"]), category, draft=draft)
+        out = Post(post["title"], post["html"], post["tags"])
+        info = post.get("formula")
+        if info and self.platform_key == "wordpress" and post.get("status") != "published":
+            out.slug = info.get("slug") or None
+            out.meta = {"rank_math_focus_keyword": info.get("focus_keyword") or info.get("main", "")}
+        result = self.platform.publish(out, category, draft=draft)
         return self.store.update(post_id, status="saved" if draft else "published", url=result.url,
                                  published_at=time.time())
 
@@ -325,20 +336,24 @@ class App:
             job.update("참고 자료를 읽는 중...")
             references = self.reference_text(raw_refs)
         writing_style = self.style_for_writing()
-        job.update("AI가 글을 쓰는 중... (내 PC AI는 몇 분 걸릴 수 있습니다)")
-        length = int(params.get("length") or 2000)
-        post = self.writers[kind](
-            category=category.name, topic=params.get("topic") or None, tone=params.get("tone") or "친근한 존댓말",
-            length=length, extra=params.get("extra") or None, model=model,
-            style=writing_style, references=references,
-        )
-        if self.cfg.get("refine_enabled"):
-            job.update("AI가 글을 다듬는 중...")
-            post = self.refiner(engine, post, writing_style)
+        formula_info = None
+        if params.get("mode") == "formula":
+            post, formula_info = self.write_formula(job, engine, params, writing_style, references)
+        else:
+            job.update("AI가 글을 쓰는 중... (내 PC AI는 몇 분 걸릴 수 있습니다)")
+            length = int(params.get("length") or 2000)
+            post = self.writers[kind](
+                category=category.name, topic=params.get("topic") or None, tone=params.get("tone") or "친근한 존댓말",
+                length=length, extra=params.get("extra") or None, model=model,
+                style=writing_style, references=references,
+            )
+            if self.cfg.get("refine_enabled"):
+                job.update("AI가 글을 다듬는 중...")
+                post = self.refiner(engine, post, writing_style)
         saved = self.store.add(
             title=post.title, html=post.html, tags=post.tags, category=_category_json(category),
             platform=self.platform_key, engine=engine, topic=params.get("topic") or None,
-            references=raw_refs or None, styled=bool(writing_style),
+            references=raw_refs or None, styled=bool(writing_style), formula=formula_info,
         )
         if self.cfg.get("factcheck_auto"):
             try:
@@ -350,6 +365,83 @@ class App:
             else:
                 saved = self.store.update(saved["id"], factcheck=report)
         return saved
+
+    def write_formula(self, job: Job, engine: str, params: dict, writing_style, references):
+        main = (params.get("topic") or "").strip()
+        if not main:
+            raise WriterError("워프 공식은 메인 키워드가 필요합니다. '메인 키워드' 칸을 채워 주세요.")
+        kws = [k.strip() for k in params.get("keywords") or [] if str(k).strip()]
+        if not kws:
+            job.update("네이버 자동검색어를 모으는 중...")
+            kws = self.keyword_collector(main)
+        color = params.get("color") or self.cfg.get("formula_color", "coral")
+        self.cfg["formula_color"] = color
+        post, info = self.formula_writer(
+            engine, main, kws, button_url=(params.get("button_url") or "").strip() or None,
+            button_text=(params.get("button_text") or "").strip() or None, extra=params.get("extra") or None,
+            style=writing_style, references=references, app_info=(params.get("app_info") or "").strip() or None,
+            color=color, progress=job.update,
+        )
+        info["html_at_write"] = post.html
+        return post, info
+
+    def recheck_formula(self, post_id: str) -> dict:
+        post = self._post(post_id)
+        info = post.get("formula")
+        if not info:
+            raise WriterError("워프 공식으로 쓴 글이 아닙니다.")
+        info = {**info, "checks": formula.check(post["title"], post["html"], info)}
+        return self.store.update(post_id, formula=info)
+
+    def job_formula_fill(self, job: Job, params: dict):
+        post = self._post(params.get("post_id", ""))
+        info = post.get("formula")
+        if not info:
+            raise WriterError("워프 공식으로 쓴 글이 아닙니다.")
+        if post["html"] != info.get("html_at_write"):
+            raise WriterError("본문을 직접 고친 글이라 자동으로 채우면 고친 내용이 사라집니다. "
+                              "빠진 검색어를 본문에 직접 넣어 주세요.")
+        engine = params.get("engine") or post.get("engine") or self.cfg.get("engine", DEFAULT_ENGINE)
+        self.check_engine(engine)
+        data = info["data"]
+        missing = formula.missing_keywords(data, info["keywords"])
+        if not missing:
+            return self.recheck_formula(post["id"])
+        job.update(f"빠진 자동검색어 {len(missing)}개를 채우는 중...")
+        data = {**data, "sections": formula.fill_missing(engine, data, missing)}
+        html = formula.assemble(data, info)
+        info = {**info, "data": data, "html_at_write": html}
+        info["checks"] = formula.check(post["title"], html, info)
+        return self.store.update(post["id"], html=html, formula=info,
+                                 previous={"title": post["title"], "html": post["html"], "tags": post["tags"]})
+
+    def job_keywords(self, job: Job, params: dict):
+        main = (params.get("main") or "").strip()
+        job.update("네이버 자동검색어를 모으는 중...")
+        try:
+            found = self.keyword_collector(main)
+        except keywords.KeywordError as exc:
+            raise WriterError(str(exc)) from exc
+        if not found:
+            raise WriterError("자동검색어를 가져오지 못했습니다. 키워드를 조금 넓게 바꾸거나 잠시 후 다시 시도해 주세요.")
+        return found
+
+    def job_similar(self, job: Job, params: dict):
+        if self.platform_key != "wordpress" or not hasattr(self.platform, "find_similar"):
+            return []
+        if not _has_target(self.platform):
+            return []
+        return self.platform.find_similar((params.get("main") or "").strip())
+
+    def job_apps(self, job: Job, params: dict):
+        name = (params.get("name") or "").strip()
+        if not name:
+            raise WriterError("앱 이름을 넣어 주세요.")
+        job.update("앱스토어에서 찾는 중...")
+        try:
+            return self.app_finder(name)
+        except keywords.KeywordError as exc:
+            raise WriterError(str(exc)) from exc
 
     def _post(self, post_id: str) -> dict:
         post = self.store.get(post_id)
@@ -436,6 +528,10 @@ class App:
             self.cfg["refine_enabled"] = bool(data["refine_enabled"])
         if "factcheck_auto" in data:
             self.cfg["factcheck_auto"] = bool(data["factcheck_auto"])
+        if data.get("write_mode") in ("basic", "formula"):
+            self.cfg["write_mode"] = data["write_mode"]
+        if data.get("formula_color") in formula.PALETTE:
+            self.cfg["formula_color"] = data["formula_color"]
         if "style" in data:
             incoming = data["style"] or {}
             if not (incoming.get("guide") or "").strip():
@@ -655,6 +751,20 @@ def route(app: App, method: str, path: str, body: dict):
         case ("POST", "jobs", "fix"):
             return app.start_job("fix", "고쳐 쓰기 준비 중...", lambda job: app.job_fix(job, body),
                                  app.ai_runner).to_json()
+        case ("POST", "jobs", "keywords"):
+            return app.start_job("keywords", "자동검색어 수집 준비 중...", lambda job: app.job_keywords(job, body),
+                                 app.ai_runner).to_json()
+        case ("POST", "jobs", "similar"):
+            return app.start_job("similar", "기존 글과 비교하는 중...", lambda job: app.job_similar(job, body),
+                                 app.platform_runner).to_json()
+        case ("POST", "jobs", "apps"):
+            return app.start_job("apps", "앱 찾는 중...", lambda job: app.job_apps(job, body),
+                                 app.ai_runner).to_json()
+        case ("POST", "jobs", "formula-fill"):
+            return app.start_job("formula-fill", "빠진 검색어 채우기 준비 중...",
+                                 lambda job: app.job_formula_fill(job, body), app.ai_runner).to_json()
+        case ("POST", "posts", post_id, "recheck"):
+            return app.recheck_formula(post_id)
         case ("POST", "posts", post_id, "restore"):
             post = app.store.get(post_id)
             if not post or not post.get("previous"):

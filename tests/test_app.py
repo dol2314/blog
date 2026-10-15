@@ -256,3 +256,56 @@ def test_auto_factcheck_after_writing(client):
     client.app.fact_checker = broken
     job = client.job("write", {"category": "일상"})
     assert job["state"] == "done" and "factcheck" not in job["result"]
+
+
+def test_formula_mode_write_fill_recheck_and_publish(client, monkeypatch):
+    from autoposter import formula, llm
+    from tests.test_formula import KWS, MAIN, answer
+
+    app = client.app
+    client.post("/api/platform", {"key": "wordpress"})
+    client.job("login", answers=["", "site.example"])
+    app.keyword_collector = lambda main: KWS
+    still_missing = {"sections": answer(missing_time=True)["sections"]}
+    responses = [answer(missing_time=True), still_missing, still_missing]  # 두 번 채워도 빠진 상황
+    monkeypatch.setattr(llm, "generate_json", lambda *a, **k: responses.pop(0))
+
+    job = client.job("keywords", {"main": MAIN})
+    assert job["state"] == "done" and job["result"] == KWS
+
+    job = client.job("write", {"category": "일상", "mode": "formula", "topic": MAIN, "keywords": [],
+                               "button_url": "https://example.com", "color": "royal"})
+    assert job["state"] == "done", job
+    post = job["result"]
+    fx = post["formula"]
+    assert fx["keywords"] == KWS and fx["color"] == "royal" and "#3b6cff" in post["html"]
+    bad = [c for c in fx["checks"] if c["name"] == "자동검색어 전부 포함"][0]
+    assert not bad["ok"] and "정수기 렌탈 해지 시간" in bad["detail"]
+    assert client.get("/api/state")["formula_color"] == "royal"
+
+    # 빠진 검색어 채우기 (본문을 안 고쳤을 때만)
+    monkeypatch.setattr(llm, "generate_json", lambda *a, **k: {"sections": answer(missing_time=False)["sections"]})
+    job = client.job("formula-fill", {"post_id": post["id"]})
+    assert job["state"] == "done", job
+    filled = job["result"]
+    assert [c for c in filled["formula"]["checks"] if c["name"] == "자동검색어 전부 포함"][0]["ok"]
+
+    # 직접 고친 뒤에는 자동 채우기를 막고, 다시 점검은 된다
+    client.post(f"/api/posts/{post['id']}", {"html": filled["html"].replace("정수기 렌탈 해지 시간", "방문 시간")})
+    job = client.job("formula-fill", {"post_id": post["id"]})
+    assert job["state"] == "error" and "직접" in job["error"]
+    rechecked = client.post(f"/api/posts/{post['id']}/recheck").json()
+    assert not [c for c in rechecked["formula"]["checks"] if c["name"] == "자동검색어 전부 포함"][0]["ok"]
+
+    # 발행할 때 슬러그와 포커스 키워드를 보낸다
+    job = client.job("publish", {"post_id": post["id"]})
+    assert job["state"] == "done", job
+    sent, _, _ = client.platforms[-1].published[-1]
+    assert sent.slug == "water-purifier-rental-cancel" and sent.meta == {"rank_math_focus_keyword": MAIN}
+    assert formula.PALETTE["royal"][0] in sent.html
+
+
+def test_formula_mode_needs_main_keyword(client):
+    client.job("login", answers=["", "tester"])
+    job = client.job("write", {"category": "일상", "mode": "formula", "topic": ""})
+    assert job["state"] == "error" and "메인 키워드" in job["error"]

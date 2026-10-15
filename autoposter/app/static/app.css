@@ -273,3 +273,25 @@ textarea.input { resize: vertical; }
 .fc-note { font-size: 12px; color: var(--faint); }
 .pill.fc-pill { background: #e7f6ea; color: #24683a; }
 .pill.fc-warn { background: #fdecea; color: #9b2c28; }
+
+.segmented.two { grid-template-columns: 1fr 1fr; }
+.mini-badge { font-size: 10px; background: #21759b; color: #fff; border-radius: 4px; padding: 0 4px; margin-left: 2px; vertical-align: 1px; }
+.formula-box { display: grid; gap: 10px; background: #f7f9fc; border: 1px solid var(--line); border-radius: 12px; padding: 12px; }
+.field-title { font-size: 13px; font-weight: 700; }
+.kw-chips { display: flex; flex-wrap: wrap; gap: 6px; max-height: 160px; overflow-y: auto; }
+.kw-chip { display: inline-flex; align-items: center; gap: 4px; background: #fff; border: 1px solid var(--line); border-radius: 16px; padding: 3px 6px 3px 10px; font-size: 12px; }
+.kw-chip button { border: 0; background: none; color: var(--faint); cursor: pointer; padding: 0 2px; font-size: 12px; }
+.kw-chip button:hover { color: var(--red); }
+.input-sm { padding: 7px 10px; font-size: 13px; }
+.swatches { display: flex; gap: 6px; flex-wrap: wrap; }
+.swatch { width: 28px; height: 28px; border-radius: 8px; border: 2px solid transparent; cursor: pointer; }
+.swatch.active { border-color: var(--text); box-shadow: 0 0 0 2px #fff inset; }
+.similar { font-size: 12px; background: #fff7ec; border: 1px solid #f6dfbc; border-radius: 10px; padding: 8px 10px; color: #7a4b12; display: grid; gap: 3px; }
+.app-list { display: grid; gap: 8px; }
+.app-item { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; display: grid; gap: 6px; }
+.app-item .row { gap: 6px; flex-wrap: wrap; }
+.fx { border: 1px solid var(--line); border-radius: var(--radius); padding: 14px 16px; display: grid; gap: 8px; }
+.fx-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.fx-row { display: grid; grid-template-columns: 20px 1fr; gap: 6px; font-size: 13px; }
+.fx-row .ok { color: var(--green); font-weight: 800; } .fx-row .no { color: var(--red); font-weight: 800; }
+.fx-detail { color: var(--muted); font-size: 12px; word-break: break-all; }

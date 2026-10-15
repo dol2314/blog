@@ -21,6 +21,9 @@ class Post:
     title: str
     html: str
     tags: list[str] = field(default_factory=list)
+    slug: str | None = None  # 워드프레스 주소 (발행 후에는 바꾸지 않는다)
+    meta: dict = field(default_factory=dict)  # 워드프레스 추가 정보 (예: Rank Math 포커스 키워드)
+    excerpt: str | None = None
 
 
 @dataclass

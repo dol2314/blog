@@ -18,6 +18,7 @@ const S = {
   openId: null,
   busy: { platform: false, ai: false },
   pull: null, // 모델 내려받기 진행 { fraction, text }
+  formula: { keywords: [], similar: [] }, // 워프 공식: 모은 자동검색어, 비슷한 기존 글
 };
 
 // ---- 서버 호출 ----------------------------------------------------------------
@@ -186,6 +187,7 @@ function render() {
   renderEngines();
   renderAI();
   renderStyle();
+  renderMode();
   renderStats();
   renderFilters();
   renderRows();
@@ -374,7 +376,7 @@ function renderBusy() {
   $("d-draft").disabled = p;
   $("d-publish").disabled = p;
   $("write-btn").disabled = a;
-  ["d-factcheck", "d-refine", "d-fix", "sm-analyze"].forEach((id) => $(id) && ($(id).disabled = a));
+  ["d-factcheck", "d-refine", "d-fix", "sm-analyze", "kw-collect", "am-search", "fx-fill"].forEach((id) => $(id) && ($(id).disabled = a));
   $("write-btn").textContent = a ? "AI 작업 중..." : "▶ 글 생성 시작";
   $("platform-seg").querySelectorAll("button").forEach((b) => (b.disabled = p));
 }
@@ -402,7 +404,7 @@ function closeDrawer() {
 
 function previewDoc(p) {
   return `<!doctype html><meta charset="utf-8"><style>
-    body{font:16px/1.85 "Pretendard","Malgun Gothic",sans-serif;color:#1d2230;margin:22px 26px;word-break:keep-all}
+    body{font:16px/1.85 "Pretendard","Malgun Gothic",sans-serif;color:#1d2230;margin:22px 26px;word-break:keep-all;overflow-wrap:anywhere}
     h2{font-size:20px;margin:28px 0 10px;padding-left:10px;border-left:4px solid #2b5ce6}h3{font-size:17px}
     blockquote{margin:14px 0;padding:10px 16px;background:#f4f6fa;border-radius:8px;color:#4a5160}
     li{margin:4px 0}</style>${p.html}`;
@@ -453,6 +455,7 @@ function fillDrawer(id, { keepEdits = false } = {}) {
   $("d-link").hidden = !p.url;
   $("d-restore").hidden = !p.previous;
   renderFactcheck(p);
+  renderFormula(p);
   $("d-publish").textContent = p.status === "published" ? "다시 발행" : "발행하기";
 
   const list = filteredPosts();
@@ -656,6 +659,166 @@ async function restorePost() {
   }
 }
 
+// ---- 워프 공식 -----------------------------------------------------------------------
+
+function renderMode() {
+  const formulaMode = S.data.write_mode === "formula";
+  $("mode-seg").querySelectorAll("button").forEach((b) => b.classList.toggle("active", b.dataset.mode === S.data.write_mode));
+  $("formula-box").hidden = !formulaMode;
+  $("tone-length").hidden = formulaMode;
+  $("topic-label").textContent = formulaMode ? "메인 키워드" : "글 주제";
+  $("topic").placeholder = formulaMode ? "예: 정수기 렌탈 해지" : "예: 가을 단풍 명소, 제주 3박4일 코스";
+  $("topic-hint").textContent = formulaMode
+    ? "사람들이 실제로 치는 행동 키워드(신청·해지·방법·비용 등)가 좋아요."
+    : "비우면 카테고리에 맞춰 AI가 주제를 정합니다.";
+  const hint = $("mode-hint");
+  if (!formulaMode) hint.textContent = "";
+  else if (S.data.platform !== "wordpress")
+    hint.textContent = "⚠ 워프 공식은 워드프레스용입니다. 다른 블로그에서는 CTA 박스·버튼 디자인이 빠질 수 있어요.";
+  else hint.textContent = "자동검색어를 전부 담고, 첫 소제목 아래 CTA와 버튼을 넣는 워드프레스 수익형 글입니다.";
+  renderKeywords();
+  renderSwatches();
+}
+
+function renderKeywords() {
+  const box = $("kw-chips");
+  $("kw-count").textContent = S.formula.keywords.length;
+  if (!S.formula.keywords.length) {
+    box.innerHTML = `<span class="muted small">메인 키워드를 넣고 [네이버에서 수집]을 누르세요. 비워 두면 글 쓸 때 자동으로 모읍니다.</span>`;
+  } else {
+    box.innerHTML = S.formula.keywords
+      .map((k, i) => `<span class="kw-chip">${esc(k)}<button data-i="${i}" aria-label="빼기">✕</button></span>`)
+      .join("");
+    box.querySelectorAll("button").forEach(
+      (b) => (b.onclick = () => (S.formula.keywords.splice(Number(b.dataset.i), 1), renderKeywords())),
+    );
+  }
+  const sim = $("similar-box");
+  sim.hidden = !S.formula.similar.length;
+  sim.innerHTML = S.formula.similar.length
+    ? `<b>비슷한 기존 글이 있어요 (중복 주의)</b>` +
+      S.formula.similar.slice(0, 5).map((p) => `<span>· ${esc(p.title)} <span class="muted">(${esc(p.status || "")})</span></span>`).join("")
+    : "";
+}
+
+function renderSwatches() {
+  const box = $("swatches");
+  const pal = S.data.palette || {};
+  box.innerHTML = Object.entries(pal)
+    .map(
+      ([name, c]) =>
+        `<button class="swatch ${name === S.data.formula_color ? "active" : ""}" data-c="${name}" title="${esc(c.note)}" style="background:linear-gradient(135deg,${c.c1},${c.c2})"></button>`,
+    )
+    .join("");
+  box.querySelectorAll("button").forEach(
+    (b) =>
+      (b.onclick = async () => {
+        try {
+          S.data = await api("POST", "/api/settings", { formula_color: b.dataset.c });
+          render();
+        } catch (e) {
+          toastError(e);
+        }
+      }),
+  );
+}
+
+async function setMode(mode) {
+  try {
+    S.data = await api("POST", "/api/settings", { write_mode: mode });
+    render();
+  } catch (e) {
+    toastError(e);
+  }
+}
+
+async function collectKeywords() {
+  const main = $("topic").value.trim();
+  if (!main) return toastError(new Error("메인 키워드를 먼저 넣어 주세요."));
+  try {
+    S.formula.keywords = await runJob("keywords", { main }, { lane: "ai" });
+    renderKeywords();
+    toastOk(`자동검색어 ${S.formula.keywords.length}개를 모았습니다`);
+    if (S.data.platform === "wordpress") {
+      S.formula.similar = await runJob("similar", { main }, { lane: "platform" }).catch(() => []);
+      renderKeywords();
+    }
+  } catch (e) {
+    toastError(e);
+  }
+}
+
+async function searchApps() {
+  const name = $("am-name").value.trim();
+  if (!name) return;
+  const list = $("am-list");
+  try {
+    const apps = await runJob("apps", { name }, { lane: "ai" });
+    if (!apps.length) {
+      list.innerHTML = `<div class="muted">찾은 앱이 없습니다. 이름을 바꿔 보세요.</div>`;
+      return;
+    }
+    list.innerHTML = apps
+      .map(
+        (a, i) => `<div class="app-item"><b>${esc(a.name)}</b><span class="muted small">${esc(a.seller)}</span>
+        <div class="row">${a.ios ? `<button class="btn btn-light btn-sm" data-i="${i}" data-k="ios">아이폰 링크 쓰기</button>` : ""}
+        ${a.android ? `<button class="btn btn-light btn-sm" data-i="${i}" data-k="android">안드로이드 링크 쓰기</button>` : `<span class="muted small">플레이스토어는 직접 확인 필요</span>`}</div></div>`,
+      )
+      .join("");
+    list.querySelectorAll("button").forEach(
+      (b) =>
+        (b.onclick = () => {
+          const app = apps[Number(b.dataset.i)];
+          $("btn-url").value = app[b.dataset.k];
+          $("app-info").value = `${app.name} (${app.seller})\n${app.description}`;
+          $("app-modal").hidden = true;
+          toastOk(`${app.name} 링크를 버튼에 넣었습니다`);
+        }),
+    );
+  } catch (e) {
+    toastError(e);
+  }
+}
+
+function renderFormula(p) {
+  const box = $("d-fx");
+  const fx = p.formula;
+  if (!fx) {
+    box.hidden = true;
+    return;
+  }
+  box.hidden = false;
+  const checks = fx.checks || [];
+  const passed = checks.filter((c) => c.ok).length;
+  const missing = checks.find((c) => c.name === "자동검색어 전부 포함" && !c.ok);
+  box.innerHTML = `
+    <div class="fx-head"><b>워프 공식 점검</b>
+      <span class="status ${passed === checks.length ? "v-ok" : "v-bad"}">통과 ${passed}/${checks.length}</span>
+      <span class="muted small">포커스 키워드: ${esc(fx.focus_keyword)} · 주소: ${esc(fx.slug || "-")}</span></div>
+    ${checks
+      .map(
+        (c) => `<div class="fx-row"><span class="${c.ok ? "ok" : "no"}">${c.ok ? "✓" : "✕"}</span>
+        <div>${esc(c.name)} ${c.detail ? `<div class="fx-detail">${esc(c.detail)}</div>` : ""}</div></div>`,
+      )
+      .join("")}
+    <div class="row gap8">
+      <button class="btn btn-light btn-sm" id="fx-recheck">다시 점검</button>
+      ${missing ? `<button class="btn btn-primary btn-sm" id="fx-fill">빠진 검색어 채우기</button>` : ""}
+    </div>
+    <div class="fc-note">Rank Math 점수는 워드프레스 에디터에서 한 번 확인하세요 (72점 이상 권장). 발행 후에는 주소(슬러그)를 바꾸지 않습니다.</div>`;
+  $("fx-recheck").onclick = async () => {
+    try {
+      await flushSave();
+      Object.assign(post(p.id), await api("POST", `/api/posts/${p.id}/recheck`));
+      render();
+      toastOk("다시 점검했습니다");
+    } catch (e) {
+      toastError(e);
+    }
+  };
+  if ($("fx-fill")) $("fx-fill").onclick = () => reviewJob("formula-fill", () => "빠진 검색어를 채웠습니다. 점검 결과를 확인하세요");
+}
+
 // ---- 동작 ------------------------------------------------------------------------
 
 async function switchPlatform(key) {
@@ -697,6 +860,8 @@ async function loadCategories() {
 async function writePost() {
   const category = $("category").value;
   if (!category) return toastError(new Error("카테고리를 먼저 불러와 골라 주세요. (왼쪽 위 [카테고리 불러오기])"));
+  const formulaMode = S.data.write_mode === "formula";
+  if (formulaMode && !$("topic").value.trim()) return toastError(new Error("워프 공식은 메인 키워드가 필요합니다."));
   const engine = currentEngine();
   if (engine.kind === "claude" && !S.data.has_api_key) {
     const ok = await askApiKey();
@@ -713,6 +878,16 @@ async function writePost() {
         extra: $("extra").value.trim(),
         references: $("references").value.trim(),
         engine: engine.id,
+        ...(formulaMode
+          ? {
+              mode: "formula",
+              keywords: S.formula.keywords,
+              button_url: $("btn-url").value.trim(),
+              button_text: $("btn-text").value.trim(),
+              app_info: $("app-info").value,
+              color: S.data.formula_color,
+            }
+          : {}),
       },
       { lane: "ai" },
     );
@@ -858,6 +1033,31 @@ function bind() {
         $("d-html").hidden = t.dataset.tab !== "html";
       }),
   );
+  $("mode-seg").querySelectorAll("button").forEach((b) => (b.onclick = () => setMode(b.dataset.mode)));
+  $("kw-collect").onclick = collectKeywords;
+  $("kw-add").onkeydown = (e) => {
+    const v = e.target.value.trim();
+    if (e.key === "Enter" && v) {
+      if (!S.formula.keywords.includes(v)) S.formula.keywords.push(v);
+      e.target.value = "";
+      renderKeywords();
+    }
+  };
+  $("topic").oninput = () => {
+    // 메인 키워드가 바뀌면 이전에 모은 자동검색어는 맞지 않는다
+    if (S.formula.keywords.length || S.formula.similar.length) {
+      S.formula = { keywords: [], similar: [] };
+      renderKeywords();
+    }
+  };
+  $("app-find").onclick = () => {
+    $("am-name").value = $("topic").value.split(" ")[0] || "";
+    $("am-list").innerHTML = "";
+    $("app-modal").hidden = false;
+  };
+  $("am-close").onclick = () => ($("app-modal").hidden = true);
+  $("am-search").onclick = searchApps;
+  $("am-name").onkeydown = (e) => e.key === "Enter" && searchApps();
   $("style-btn").onclick = openStyleModal;
   $("sm-close").onclick = $("sm-cancel").onclick = () => ($("style-modal").hidden = true);
   $("sm-analyze").onclick = analyzeStyle;

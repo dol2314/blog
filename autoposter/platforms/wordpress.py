@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import html as html_lib
 import os
 
 import requests
@@ -73,10 +74,31 @@ class WordPress(Platform):
             "categories": [int(category.id)],
             "tags": [self._tag_id(name) for name in post.tags],
         }
+        if post.slug:
+            body["slug"] = post.slug  # 새 글을 만들 때만 보낸다. 이미 발행한 글의 주소는 바꾸지 않는다
+        if post.excerpt:
+            body["excerpt"] = post.excerpt
+        if post.meta:
+            body["meta"] = post.meta  # 사이트에 등록되지 않은 항목은 워드프레스가 무시한다
         resp = self._request("POST", "posts", json=body)
         self._raise_for_status(resp, "글을 올리지 못했습니다")
         data = resp.json()
         return PublishResult(url=data.get("link"), draft=draft)
+
+    def find_similar(self, query: str, limit: int = 8) -> list[dict]:
+        """제목·본문에 검색어가 들어간 기존 글 (중복 글 방지용)."""
+        resp = self._request("GET", "posts", params={
+            "search": query, "per_page": limit, "status": "publish,future,draft,pending",
+            "_fields": "id,title,link,status,date",
+        })
+        if resp.status_code == 400:  # 권한이 없으면 발행된 글만 본다
+            resp = self._request("GET", "posts", params={"search": query, "per_page": limit, "_fields": "id,title,link,status,date"})
+        self._raise_for_status(resp, "기존 글을 조회하지 못했습니다")
+        return [
+            {"title": html_lib.unescape(p["title"]["rendered"]), "link": p.get("link"), "status": p.get("status"),
+             "date": p.get("date")}
+            for p in resp.json()
+        ]
 
     def _tag_id(self, name: str) -> int:
         resp = self._request("GET", "tags", params={"search": name, "per_page": 100})

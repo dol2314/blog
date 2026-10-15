@@ -42,10 +42,34 @@
       </section>
 
       <section class="side-section">
-        <div class="side-label">글 주제</div>
+        <div class="side-label">글쓰기 방식</div>
+        <div class="segmented two" id="mode-seg">
+          <button data-mode="basic">기본 글쓰기</button>
+          <button data-mode="formula">워프 공식 <span class="mini-badge">WP</span></button>
+        </div>
+        <div class="hint" id="mode-hint"></div>
+
+        <div class="side-label" id="topic-label">글 주제</div>
         <input id="topic" class="input" placeholder="예: 가을 단풍 명소, 제주 3박4일 코스">
-        <div class="hint">비우면 카테고리에 맞춰 AI가 주제를 정합니다.</div>
-        <div class="grid2">
+        <div class="hint" id="topic-hint">비우면 카테고리에 맞춰 AI가 주제를 정합니다.</div>
+
+        <div class="formula-box" id="formula-box" hidden>
+          <div class="row between">
+            <span class="field-title">자동검색어 <b id="kw-count">0</b>개</span>
+            <button class="btn btn-light btn-sm" id="kw-collect">네이버에서 수집</button>
+          </div>
+          <div class="kw-chips" id="kw-chips"><span class="muted small">메인 키워드를 넣고 [네이버에서 수집]을 누르세요. 비워 두면 글 쓸 때 자동으로 모읍니다.</span></div>
+          <input id="kw-add" class="input input-sm" placeholder="직접 추가: 입력 후 Enter">
+          <div class="similar" id="similar-box" hidden></div>
+          <label class="field"><span>버튼 링크 <em class="muted small">실제로 그 일을 하는 화면으로</em></span>
+            <div class="row gap8"><input id="btn-url" class="input" placeholder="https://"><button class="btn btn-light btn-sm" id="app-find">앱 찾기</button></div></label>
+          <label class="field"><span>버튼 문구</span>
+            <input id="btn-text" class="input" placeholder="비우면 AI가 정합니다 (예: 내 위약금 바로 확인하기)"></label>
+          <input type="hidden" id="app-info">
+          <div class="field"><span>버튼 색</span><div class="swatches" id="swatches"></div></div>
+        </div>
+
+        <div class="grid2" id="tone-length">
           <label class="field">
             <span>말투</span>
             <select id="tone" class="select">
@@ -148,6 +172,8 @@
     </div>
     <div class="fc" id="d-fc" hidden></div>
 
+    <div class="fx" id="d-fx" hidden></div>
+
     <div class="d-label">카테고리</div>
     <select id="d-category" class="select"></select>
 
@@ -217,6 +243,19 @@
       <button class="btn btn-light" id="sm-cancel">닫기</button>
       <button class="btn btn-primary" id="sm-save">저장</button>
     </div>
+  </div>
+</div>
+
+<!-- 앱 찾기 -->
+<div class="modal-wrap" id="app-modal" hidden>
+  <div class="modal modal-wide">
+    <div class="row between"><div class="modal-title">앱스토어에서 앱 찾기</div>
+      <button class="icon-btn" id="am-close" aria-label="닫기">✕</button></div>
+    <div class="muted">앱으로 하는 일이면 홈페이지가 아니라 앱스토어로 보내야 독자가 실제로 일을 할 수 있어요.
+      고른 앱의 공식 설명은 AI에게 함께 전달돼, 앱 안 메뉴 이름을 지어내지 않게 합니다.</div>
+    <div class="row gap8"><input id="am-name" class="input" placeholder="앱 이름 (예: 코웨이, 정부24)">
+      <button class="btn btn-primary" id="am-search">찾기</button></div>
+    <div class="app-list" id="am-list"></div>
   </div>
 </div>
 

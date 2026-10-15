@@ -122,3 +122,17 @@ def test_login_success_and_api_errors_are_reported():
     fake.route = lambda *a: FakeResponse(500, {"code": "x", "message": "서버 오류"})
     with pytest.raises(PlatformError, match="서버 오류"):
         wp.get_categories()
+
+
+def test_publish_sends_slug_meta_and_finds_similar():
+    wp, fake = make()
+    post = Post("제목", "<p>본문</p>", [], slug="my-slug", meta={"rank_math_focus_keyword": "키워드"})
+    wp.publish(post, Category("1", "일상"))
+    assert fake.posts[0]["slug"] == "my-slug" and fake.posts[0]["meta"] == {"rank_math_focus_keyword": "키워드"}
+    wp.publish(Post("제목2", "<p>본문</p>"), Category("1", "일상"))
+    assert "slug" not in fake.posts[1] and "meta" not in fake.posts[1]
+
+    fake.route = lambda method, route, params, body: FakeResponse(
+        200, [{"id": 1, "title": {"rendered": "정수기 &amp; 렌탈"}, "link": "https://e/1", "status": "draft", "date": "d"}]
+    )
+    assert wp.find_similar("정수기") == [{"title": "정수기 & 렌탈", "link": "https://e/1", "status": "draft", "date": "d"}]
