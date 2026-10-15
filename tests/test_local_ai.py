@@ -90,3 +90,15 @@ def test_write_retries_bad_format_and_converts_markdown(ollama):
 def test_missing_model_message(ollama):
     with pytest.raises(local_ai.LocalAIError, match="내려받아"):
         local_ai.write_post_local("일상", model="qwen3:14b")
+
+
+def test_ignores_system_proxy(ollama, monkeypatch):
+    # PC에 프록시가 설정돼 있어도 내 PC의 Ollama에는 바로 접속해야 한다
+    monkeypatch.setenv("HTTP_PROXY", "http://127.0.0.1:9")
+    monkeypatch.setenv("NO_PROXY", "")
+    assert local_ai.status()["running"] is True
+
+
+def test_not_running_reports_reason(monkeypatch):
+    monkeypatch.setattr(local_ai, "OLLAMA_URL", "http://127.0.0.1:9")
+    assert "ConnectionError" in local_ai.status()["reason"]

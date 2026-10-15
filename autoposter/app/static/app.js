@@ -249,9 +249,10 @@ function renderAI() {
         ? `<div class="line"><span class="dot warn"></span>Ollama가 꺼져 있습니다</div>
            <div class="row gap8"><button class="btn btn-light btn-sm" data-act="start">Ollama 켜기</button>
            <button class="btn btn-light btn-sm" data-act="recheck">다시 확인</button></div>`
-        : `<div class="line"><span class="dot warn"></span>내 PC AI를 쓰려면 Ollama 설치가 필요합니다 (무료)</div>
-           <div class="row gap8"><button class="btn btn-light btn-sm" data-act="download">설치 페이지 열기</button>
-           <button class="btn btn-light btn-sm" data-act="recheck">설치 후 다시 확인</button></div>`;
+        : `<div class="line"><span class="dot warn"></span>Ollama가 응답하지 않습니다. 설치하지 않았다면 먼저 설치해 주세요 (무료)</div>
+           <div class="row gap8"><button class="btn btn-light btn-sm" data-act="download">설치 페이지</button>
+           <button class="btn btn-light btn-sm" data-act="start">Ollama 켜기</button>
+           <button class="btn btn-light btn-sm" data-act="recheck">다시 확인</button></div>`;
     } else if (!ai.models.some((m) => m === engine.model || m === `${engine.model}:latest`)) {
       box.innerHTML = `<div class="line"><span class="dot warn"></span>모델을 처음 한 번 내려받아야 합니다 (${esc(engine.size)})</div>
         <button class="btn btn-light btn-sm" data-act="pull">모델 내려받기</button>`;
@@ -567,9 +568,28 @@ async function aiAction(act) {
   try {
     if (act === "key") return askApiKey();
     if (act === "download") return api("POST", "/api/open", { url: (S.ai && S.ai.download_page) || "https://ollama.com/download" });
-    if (act === "recheck") return refreshAI();
+    if (act === "recheck") {
+      showToast("내 PC AI(Ollama) 상태를 확인하는 중...", { spin: true });
+      await refreshAI();
+      if (S.ai.running) return toastOk(`Ollama 연결됨 (버전 ${S.ai.version || "?"})`);
+      return showModal({
+        title: "Ollama에 연결하지 못했습니다",
+        text:
+          "1. 화면 오른쪽 아래 작업 표시줄에 라마 아이콘이 있는지 확인하세요.\n" +
+          "   없으면 시작 메뉴에서 'Ollama'를 찾아 실행하거나 [Ollama 켜기]를 누르세요.\n" +
+          "2. 브라우저 주소창에 http://127.0.0.1:11434 를 입력했을 때\n" +
+          "   'Ollama is running'이 보이면 정상입니다.\n" +
+          "3. 설치 직후라면 PC를 한 번 재시작해 보세요.\n\n" +
+          `자세한 원인: ${S.ai.reason || "알 수 없음"}`,
+        ok: "확인",
+        cancel: "닫기",
+      }).then(() => (document.getElementById("toast").hidden = true));
+    }
     if (act === "start") {
-      await api("POST", "/api/ai/start");
+      const { started } = await api("POST", "/api/ai/start");
+      if (!started) {
+        return toastError(new Error("이 PC에서 Ollama 실행 파일을 찾지 못했습니다. 설치 페이지에서 설치했는지 확인하거나, 시작 메뉴에서 Ollama를 직접 실행해 주세요."));
+      }
       showToast("Ollama를 켜는 중...", { spin: true });
       for (let i = 0; i < 10 && !(S.ai && S.ai.running); i++) {
         await sleep(1500);

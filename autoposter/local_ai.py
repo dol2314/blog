@@ -8,6 +8,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -40,14 +41,29 @@ class LocalAIError(WriterError):
     pass
 
 
+def _http(session):
+    """Ollama는 내 PC 안에 있으므로 PC에 설정된 프록시를 거치지 않고 바로 접속한다."""
+    if session is not None:
+        return session
+    direct = requests.Session()
+    direct.trust_env = False
+    return direct
+
+
 def status(session: requests.Session | None = None) -> dict:
     """Ollama 실행 여부와 내려받은 모델 목록."""
-    http = session or requests
+    http = _http(session)
     try:
-        version = http.get(f"{OLLAMA_URL}/api/version", timeout=3).json().get("version")
+        version = http.get(f"{OLLAMA_URL}/api/version", timeout=5).json().get("version")
         tags = http.get(f"{OLLAMA_URL}/api/tags", timeout=5).json()
-    except (requests.RequestException, ValueError):
-        return {"running": False, "installed": _installed_path() is not None, "version": None, "models": []}
+    except (requests.RequestException, ValueError) as exc:
+        return {
+            "running": False,
+            "installed": _installed_path() is not None,
+            "version": None,
+            "models": [],
+            "reason": f"{type(exc).__name__}: {exc}"[:300],
+        }
     names = [m.get("name", "") for m in tags.get("models", [])]
     return {"running": True, "installed": True, "version": version, "models": names}
 
@@ -57,28 +73,36 @@ def has_model(model: str, models: list[str]) -> bool:
 
 
 def start_ollama() -> bool:
-    """설치돼 있지만 꺼져 있으면 켠다 (Windows)."""
+    """설치돼 있지만 꺼져 있으면 켠다."""
     path = _installed_path()
     if not path:
         return False
+    args = [str(path)] if path.name.lower() == "ollama app.exe" else [str(path), "serve"]
     flags = getattr(subprocess, "DETACHED_PROCESS", 0) | getattr(subprocess, "CREATE_NO_WINDOW", 0)
-    subprocess.Popen([str(path)], creationflags=flags, close_fds=True)  # noqa: S603
+    subprocess.Popen(  # noqa: S603
+        args, creationflags=flags, close_fds=True,
+        stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+    )
     return True
 
 
 def _installed_path() -> Path | None:
-    if os.name != "nt":
-        return None
-    base = Path(os.environ.get("LOCALAPPDATA", "")) / "Programs" / "Ollama"
-    for name in ("ollama app.exe", "ollama.exe"):
-        if (base / name).exists():
-            return base / name
-    return None
+    """Ollama 실행 파일 위치 (트레이 앱을 우선)."""
+    folders = []
+    for env in ("LOCALAPPDATA", "ProgramFiles"):
+        if os.environ.get(env):
+            folders.append(Path(os.environ[env]) / ("Programs/Ollama" if env == "LOCALAPPDATA" else "Ollama"))
+    for folder in folders:
+        for name in ("ollama app.exe", "ollama.exe"):
+            if (folder / name).exists():
+                return folder / name
+    found = shutil.which("ollama")
+    return Path(found) if found else None
 
 
 def pull(model: str, on_progress=None, session: requests.Session | None = None) -> None:
     """모델을 내려받는다. on_progress(0~1 비율 또는 None, 상태 글자)."""
-    http = session or requests
+    http = _http(session)
     try:
         resp = http.post(f"{OLLAMA_URL}/api/pull", json={"model": model, "stream": True}, stream=True, timeout=60)
     except requests.RequestException as exc:
@@ -121,7 +145,7 @@ def write_post_local(
     session: requests.Session | None = None,
     attempts: int = 3,
 ) -> Post:
-    http = session or requests
+    http = _http(session)
     body = {
         "model": model,
         "messages": [
