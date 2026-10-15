@@ -32,8 +32,17 @@ class FakeWordPress:
         self.pretty = pretty
         self.password = password.replace(" ", "")
         self.tags = [{"id": 7, "name": "여행"}]
+        self.app_passwords = True
         self.posts = []
         self.calls = []
+
+    def get(self, url, params=None, timeout=None):
+        # 사이트 첫 화면 정보 (앱 연결 승인 주소 포함)
+        params = params or {}
+        if (urlparse(url).path == "/wp-json/" and self.pretty) or (params.get("rest_route") == "/" and not self.pretty):
+            auth = {"application-passwords": {"endpoints": {"authorization": "https://example.com/wp-admin/authorize-application.php"}}}
+            return FakeResponse(200, {"namespaces": ["wp/v2"], "authentication": auth if self.app_passwords else []})
+        return FakeResponse(404, "<html>not found</html>")
 
     def request(self, method, url, params=None, auth=None, timeout=None, json=None):
         params = dict(params or {})
@@ -108,14 +117,50 @@ def test_draft_status():
 
 def test_login_with_wrong_password_raises():
     wp, _ = make()
+    wp.open_url = lambda url: None
     answers = iter(["example.com", "admin", "wrong"])
-    with pytest.raises(PlatformError):
+    with pytest.raises(PlatformError, match="새 비밀번호"):
         wp.login(lambda *a, **k: next(answers))
     assert wp.settings["site"] == "https://example.com"
 
 
+@pytest.mark.parametrize("pretty", [True, False])
+def test_login_opens_authorize_screen(pretty):
+    wp, fake = make(pretty)
+    opened, questions = [], []
+    wp.open_url = opened.append
+    answers = iter(["example.com", "admin", "abcd efgh"])
+
+    def prompt(question, **kw):
+        questions.append(question)
+        return next(answers)
+
+    wp.login(prompt)
+    assert opened == ["https://example.com/wp-admin/authorize-application.php?app_name=%EB%B8%94%EB%A1%9C%EA%B7%B8%20%EC%9E%90%EB%8F%99%20%ED%8F%AC%EC%8A%A4%ED%8C%85"]
+    assert "승인합니다" in questions[-1]
+    assert wp.is_logged_in()
+
+
+def test_login_without_app_password_support_opens_profile():
+    wp, fake = make()
+    fake.app_passwords = False
+    opened = []
+    wp.open_url = opened.append
+    answers = iter(["example.com", "admin", "abcd efgh"])
+    wp.login(lambda *a, **k: next(answers))
+    assert opened == ["https://example.com/wp-admin/profile.php"]
+
+
+def test_login_rejects_non_wordpress_site():
+    wp, fake = make()
+    fake.get = lambda *a, **k: FakeResponse(200, "<html>그냥 홈페이지</html>")
+    with pytest.raises(PlatformError, match="워드프레스를 찾지 못했습니다"):
+        wp.login(lambda *a, **k: "example.com")
+
+
 def test_login_success_and_api_errors_are_reported():
     wp, fake = make()
+    wp.open_url = lambda url: None
     answers = iter(["https://example.com/", "admin", "abcd efgh"])
     wp.login(lambda *a, **k: next(answers))
     assert wp.is_logged_in()

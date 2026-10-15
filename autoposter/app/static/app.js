@@ -216,7 +216,7 @@ function renderPlatform() {
   } else {
     dot.className = "dot";
     $("conn-text").textContent =
-      S.data.platform === "wordpress" ? "사이트 주소와 앱 비밀번호로 접속합니다" : "브라우저 창에서 직접 로그인합니다";
+      S.data.platform === "wordpress" ? "접속하면 워드프레스 로그인·승인 창이 열립니다" : "브라우저 창에서 직접 로그인합니다";
   }
   $("login-btn").textContent = cur && cur.target ? "다시 접속" : "접속하기";
 }

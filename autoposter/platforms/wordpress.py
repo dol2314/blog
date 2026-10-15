@@ -4,11 +4,16 @@ from __future__ import annotations
 
 import html as html_lib
 import os
+import webbrowser
+from urllib.parse import quote
 
 import requests
 
 from ..models import Category, Post, PublishResult
 from .base import Platform, PlatformError
+
+
+APP_NAME = "블로그 자동 포스팅"
 
 
 class WordPress(Platform):
@@ -19,6 +24,7 @@ class WordPress(Platform):
         super().__init__(settings)
         self.http = session or requests.Session()
         self._api_style: str | None = None  # "pretty" (/wp-json/) 또는 "query" (?rest_route=)
+        self.open_url = webbrowser.open
 
     # ---- 접속 -------------------------------------------------------------
 
@@ -26,15 +32,51 @@ class WordPress(Platform):
         site = prompt("워드프레스 사이트 주소 (예: https://myblog.com)").strip().rstrip("/")
         if not site.startswith("http"):
             site = "https://" + site
-        user = prompt("사용자명 (관리자 로그인 아이디)").strip()
-        password = prompt(
-            "애플리케이션 비밀번호 (관리자 > 사용자 > 프로필 > 애플리케이션 비밀번호에서 발급)",
-            secret=True,
-        ).strip()
-        self.settings.update(site=site, username=user, app_password=password)
+        self.settings["site"] = site
         self._api_style = None
+        authorize = self._authorize_url(site)
+        user = prompt("워드프레스 로그인 아이디 (관리자 아이디, 이메일이 아닌 아이디)").strip()
+        if authorize:
+            # 워드프레스가 제공하는 '앱 연결 승인' 화면을 연다. 로그인 → 승인 → 새 비밀번호가 화면에 나온다.
+            self.open_url(f"{authorize}?app_name={quote(APP_NAME)}")
+            question = (
+                "방금 열린 브라우저 창에서\n"
+                "① 워드프레스에 로그인하고\n"
+                "② [예, 이 연결을 승인합니다]를 누른 뒤\n"
+                "③ 화면에 나온 새 비밀번호(띄어쓰기 포함)를 복사해 아래에 붙여넣으세요."
+            )
+        else:
+            self.open_url(f"{site}/wp-admin/profile.php")
+            question = (
+                "이 사이트는 앱 연결 승인 화면을 열 수 없어 프로필 화면을 열었습니다.\n"
+                "프로필 아래 '애플리케이션 비밀번호'에서 이름을 적고 [새 애플리케이션 비밀번호 추가]를 누른 뒤,\n"
+                "나온 비밀번호를 복사해 붙여넣으세요.\n"
+                "(그 항목이 없으면 https가 아니거나 보안 플러그인이 막은 것입니다)"
+            )
+        password = prompt(question, secret=True).strip()
+        self.settings.update(username=user, app_password=password)
         if not self.is_logged_in():
-            raise PlatformError("로그인에 실패했습니다. 사이트 주소, 사용자명, 애플리케이션 비밀번호를 확인하세요.")
+            raise PlatformError(
+                "로그인에 실패했습니다. 로그인 아이디와 붙여넣은 비밀번호를 확인하세요. "
+                "(워드프레스 로그인 비밀번호가 아니라, 승인 후 화면에 나온 새 비밀번호여야 합니다)"
+            )
+
+    def _authorize_url(self, site: str) -> str | None:
+        """사이트가 워드프레스인지 확인하고, 앱 연결 승인 화면 주소를 알아낸다."""
+        index = None
+        for url, params in ((f"{site}/wp-json/", None), (f"{site}/", {"rest_route": "/"})):
+            try:
+                resp = self.http.get(url, params=params, timeout=20)
+                data = resp.json() if resp.ok else None
+            except (requests.RequestException, ValueError):
+                continue
+            if isinstance(data, dict) and "namespaces" in data:
+                index = data
+                break
+        if index is None:
+            raise PlatformError(f"{site} 에서 워드프레스를 찾지 못했습니다. 사이트 주소를 확인해 주세요.")
+        auth = (index.get("authentication") or {}).get("application-passwords") or {}
+        return (auth.get("endpoints") or {}).get("authorization")
 
     def is_logged_in(self) -> bool:
         if not self.settings.get("site") or not self.settings.get("username"):
