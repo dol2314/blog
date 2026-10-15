@@ -2,7 +2,7 @@
 
 ## Blog autoposter
 
-`autoposter/` is a Python CLI (`python -m autoposter`) that uploads posts to WordPress (REST API), Naver Blog and Tistory (Playwright browser automation). Naver/Tistory selectors live in the `SELECTORS` dict at the top of each platform module. The Tkinter GUI is `autoposter/gui.py` (`python -m autoposter.gui`, launched by `실행.bat`); platform objects are only touched on its single worker thread because Playwright's sync API is thread-bound. GUI tests need tkinter and a display (`xvfb-run`). Run tests with `python -m pytest`; browser tests need Chromium (set `AUTOPOSTER_BROWSER_PATH`, e.g. `/opt/pw-browsers/chromium` in cloud sessions). User-facing text is Korean.
+`autoposter/` is a Python CLI (`python -m autoposter`) that uploads posts to WordPress (REST API), Naver Blog and Tistory (Playwright browser automation). Naver/Tistory selectors live in the `SELECTORS` dict at the top of each platform module. The desktop app is `autoposter/app/` (`python -m autoposter.app`, launched by `실행.bat`): a 127.0.0.1 HTTP server with a per-run token (`server.py`) serving a vanilla HTML/CSS/JS dashboard (`static/`), opened as an Edge/Chrome `--app` window. Long work runs as jobs on two single-thread runners (platform, ai); platform objects are only touched on the platform runner because Playwright's sync API is thread-bound. Local AI is Ollama + Qwen3 (`local_ai.py`, Apache 2.0); Claude is optional (`writer.py`). Post history lives in `~/.blog-autoposter/posts.json`. Run tests with `python -m pytest`; browser tests need Chromium (set `AUTOPOSTER_BROWSER_PATH`, e.g. `/opt/pw-browsers/chromium` in cloud sessions). User-facing text is Korean.
 
 ## REA (Reverse Engineer Anything)
 

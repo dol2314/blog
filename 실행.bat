@@ -63,10 +63,8 @@ rem ---- 4. 실행 - 인자 없이 실행하면 창 화면, "실행.bat cli"처�
 :apikey
 :run
 if not "%~1"=="" goto run_cli
-"%VPY%" -c "import tkinter" >nul 2>&1
-if errorlevel 1 goto no_tk
 echo 프로그램 창을 여는 중...
-start "" "%APP%.venv\Scripts\pythonw.exe" -m autoposter.gui
+start "" "%APP%.venv\Scripts\pythonw.exe" -m autoposter.app
 exit /b 0
 
 :run_cli
@@ -76,14 +74,6 @@ echo.
 echo.
 pause
 exit /b
-
-:no_tk
-echo [오류] 창 화면에 필요한 tkinter가 이 파이썬에 없습니다.
-echo 파이썬 설치 파일을 다시 실행해 Modify를 누르고 "tcl/tk and IDLE"을 체크해 주세요.
-echo 그동안은 명령창 메뉴로 쓸 수 있습니다: 실행.bat cli
-echo.
-pause
-exit /b 1
 
 :missing_files
 echo [오류] 프로그램 파일이 이 폴더에 없습니다.

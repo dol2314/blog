@@ -3,3 +3,4 @@ __pycache__/
 .pytest_cache/
 .venv/
 api_key.txt
+*.whl

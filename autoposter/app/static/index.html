@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>블로그 자동 포스팅</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%232b5ce6'/%3E%3Ctext x='16' y='23' font-size='19' font-weight='800' text-anchor='middle' fill='white' font-family='Arial'%3EB%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<div class="layout">
+  <!-- 왼쪽: 글 만들기 설정 -->
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-mark">B</div>
+      <div>
+        <div class="brand-name">블로그 자동 포스팅</div>
+        <div class="brand-sub">AI 글쓰기 · 자동 업로드</div>
+      </div>
+      <button class="icon-btn" id="settings-btn" title="설정" aria-label="설정">⚙</button>
+    </div>
+
+    <div class="side-scroll">
+      <section class="side-section">
+        <div class="side-label">블로그</div>
+        <div class="segmented" id="platform-seg"></div>
+        <div class="conn" id="conn-box">
+          <span class="dot" id="conn-dot"></span>
+          <span id="conn-text">접속 정보 없음</span>
+        </div>
+        <div class="row gap8">
+          <button class="btn btn-light grow" id="login-btn">접속하기</button>
+          <button class="btn btn-light grow" id="cat-btn">카테고리 불러오기</button>
+        </div>
+      </section>
+
+      <section class="side-section">
+        <div class="side-label">카테고리</div>
+        <select id="category" class="select"><option value="">카테고리를 불러와 주세요</option></select>
+      </section>
+
+      <section class="side-section">
+        <div class="side-label">글 주제</div>
+        <input id="topic" class="input" placeholder="예: 가을 단풍 명소, 제주 3박4일 코스">
+        <div class="hint">비우면 카테고리에 맞춰 AI가 주제를 정합니다.</div>
+        <div class="grid2">
+          <label class="field">
+            <span>말투</span>
+            <select id="tone" class="select">
+              <option>친근한 존댓말</option><option>전문적인 존댓말</option><option>편안한 반말</option><option>정보 전달 위주</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>분량</span>
+            <select id="length" class="select">
+              <option value="1000">1,000자</option><option value="2000" selected>2,000자</option>
+              <option value="3000">3,000자</option><option value="4000">4,000자</option>
+            </select>
+          </label>
+        </div>
+        <label class="field">
+          <span>추가 요청</span>
+          <textarea id="extra" class="input" rows="2" placeholder="예: 주차 정보 꼭 넣기, 표 대신 목록으로"></textarea>
+        </label>
+      </section>
+
+      <section class="side-section">
+        <div class="side-label">AI 엔진</div>
+        <select id="engine" class="select"></select>
+        <div class="ai-status" id="ai-status">상태 확인 중...</div>
+      </section>
+
+      <section class="side-section">
+        <div class="side-label">직접 쓴 글</div>
+        <button class="btn btn-ghost" id="import-btn">＋ 파일 불러오기 (.md / .html)</button>
+        <input type="file" id="import-file" accept=".md,.markdown,.html,.htm,.txt" hidden>
+      </section>
+    </div>
+
+    <div class="side-footer">
+      <button class="btn btn-primary btn-xl" id="write-btn">▶ 글 생성 시작</button>
+      <div class="foot-note" id="foot-note"></div>
+    </div>
+  </aside>
+
+  <!-- 가운데: 작성한 글 목록 -->
+  <main class="main">
+    <header class="main-head">
+      <div>
+        <h1>작성한 글</h1>
+        <div class="muted" id="head-sub"></div>
+      </div>
+    </header>
+
+    <div class="stats" id="stats"></div>
+
+    <div class="toolbar">
+      <input id="search" class="input search" placeholder="제목·태그 검색">
+      <div class="chips" id="status-chips"></div>
+      <select id="platform-filter" class="select narrow"></select>
+      <label class="check"><input type="checkbox" id="unpublished-only"> 발행 안 된 글만</label>
+    </div>
+
+    <div class="table-card">
+      <table class="table">
+        <thead>
+          <tr><th class="num">#</th><th>제목</th><th class="w-len">글자수</th><th>상태</th><th>블로그</th><th>카테고리</th><th class="w-date">작성일</th></tr>
+        </thead>
+        <tbody id="post-rows"></tbody>
+      </table>
+      <div class="empty" id="empty" hidden>
+        <div class="empty-title">아직 작성한 글이 없습니다</div>
+        <div class="muted">왼쪽에서 블로그에 접속하고 카테고리를 고른 뒤 <b>글 생성 시작</b>을 눌러 보세요.</div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- 오른쪽: 글 상세·편집 -->
+<div class="overlay" id="overlay" hidden></div>
+<aside class="drawer" id="drawer" aria-hidden="true">
+  <div class="drawer-head">
+    <div class="drawer-title">글 상세</div>
+    <button class="icon-btn" id="drawer-close" aria-label="닫기">✕</button>
+  </div>
+  <div class="drawer-body">
+    <div class="notice" id="d-notice"></div>
+
+    <div class="d-label">카테고리</div>
+    <select id="d-category" class="select"></select>
+
+    <div class="d-label">지표</div>
+    <div class="metrics" id="d-metrics"></div>
+
+    <div class="d-label">제목</div>
+    <input id="d-title" class="input input-lg">
+
+    <div class="d-label">태그 <span class="muted small">쉼표로 구분</span></div>
+    <input id="d-tags" class="input">
+    <div class="tag-list" id="d-tag-list"></div>
+
+    <div class="d-label row between">
+      <span>본문</span>
+      <div class="tabs" id="d-tabs">
+        <button class="tab active" data-tab="preview">미리보기</button>
+        <button class="tab" data-tab="html">HTML 편집</button>
+      </div>
+    </div>
+    <iframe id="d-preview" class="preview" sandbox="allow-same-origin" title="본문 미리보기"></iframe>
+    <textarea id="d-html" class="input code" hidden></textarea>
+  </div>
+  <div class="drawer-foot">
+    <button class="btn btn-danger-ghost" id="d-delete">삭제</button>
+    <div class="grow"></div>
+    <button class="btn btn-light" id="d-link" hidden>올린 글 열기</button>
+    <button class="btn btn-light" id="d-draft">임시저장</button>
+    <button class="btn btn-primary" id="d-publish">발행하기</button>
+  </div>
+  <button class="nav-arrow left" id="d-prev" aria-label="이전 글">‹</button>
+  <button class="nav-arrow right" id="d-next" aria-label="다음 글">›</button>
+</aside>
+
+<!-- 질문 창 (로그인 정보 등) -->
+<div class="modal-wrap" id="modal" hidden>
+  <div class="modal">
+    <div class="modal-title" id="modal-title">확인</div>
+    <div class="modal-text" id="modal-text"></div>
+    <input class="input" id="modal-input" hidden>
+    <div class="row end gap8">
+      <button class="btn btn-light" id="modal-cancel">취소</button>
+      <button class="btn btn-primary" id="modal-ok">확인</button>
+    </div>
+  </div>
+</div>
+
+<!-- 진행 상황 -->
+<div class="toast" id="toast" hidden>
+  <div class="toast-row"><span class="spinner" id="toast-spin"></span><span id="toast-text"></span></div>
+  <div class="bar" id="toast-bar" hidden><div id="toast-fill"></div></div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
