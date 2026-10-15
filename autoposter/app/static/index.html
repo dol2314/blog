@@ -75,6 +75,7 @@
           <button class="btn btn-light btn-sm" id="style-btn">글투 학습</button></div>
         <label class="check"><input type="checkbox" id="style-on"> <span id="style-label">내 글투 적용</span></label>
         <label class="check"><input type="checkbox" id="refine-on"> AI가 한 번 더 다듬기 <span class="muted small">(시간 약 2배)</span></label>
+        <label class="check"><input type="checkbox" id="factcheck-on"> 글 생성 후 자동 팩트체크 <span class="muted small">(공식 자료 확인)</span></label>
       </section>
 
       <section class="side-section">
@@ -139,19 +140,21 @@
   <div class="drawer-body">
     <div class="notice" id="d-notice"></div>
 
+    <div class="d-label">검토</div>
+    <div class="review-tools">
+      <button class="btn btn-primary" id="d-factcheck">🔎 공식 자료로 팩트체크</button>
+      <button class="btn btn-light" id="d-refine">✨ AI로 다듬기</button>
+      <button class="btn btn-ghost btn-sm" id="d-restore" hidden>↩ 이전 버전으로</button>
+    </div>
+    <div class="fc" id="d-fc" hidden></div>
+
     <div class="d-label">카테고리</div>
     <select id="d-category" class="select"></select>
 
     <div class="d-label">지표</div>
     <div class="metrics" id="d-metrics"></div>
 
-    <div class="d-label">검토</div>
-    <div class="review-tools">
-      <button class="btn btn-light" id="d-factcheck">🔎 공식 자료로 팩트체크</button>
-      <button class="btn btn-light" id="d-refine">✨ AI로 다듬기</button>
-      <button class="btn btn-ghost btn-sm" id="d-restore" hidden>↩ 이전 버전으로</button>
-    </div>
-    <div class="fc" id="d-fc" hidden></div>
+
 
     <div class="d-label">제목</div>
     <input id="d-title" class="input input-lg">

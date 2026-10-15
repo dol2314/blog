@@ -175,6 +175,7 @@ class App:
             "has_api_key": bool(os.environ.get("ANTHROPIC_API_KEY")),
             "style": self.cfg.get("style") or {},
             "refine_enabled": bool(self.cfg.get("refine_enabled")),
+            "factcheck_auto": bool(self.cfg.get("factcheck_auto")),
             "posts": self.store.all(),
         }
 
@@ -334,11 +335,21 @@ class App:
         if self.cfg.get("refine_enabled"):
             job.update("AI가 글을 다듬는 중...")
             post = self.refiner(engine, post, writing_style)
-        return self.store.add(
+        saved = self.store.add(
             title=post.title, html=post.html, tags=post.tags, category=_category_json(category),
             platform=self.platform_key, engine=engine, topic=params.get("topic") or None,
             references=raw_refs or None, styled=bool(writing_style),
         )
+        if self.cfg.get("factcheck_auto"):
+            try:
+                report = self.fact_checker(
+                    engine, post, raw_refs, lambda message, fraction=None: job.update(f"팩트체크: {message}", fraction)
+                )
+            except (WriterError, web.WebError) as exc:  # 글은 이미 저장됐으니 팩트체크 실패만 알린다
+                log(f"자동 팩트체크 실패: {exc}")
+            else:
+                saved = self.store.update(saved["id"], factcheck=report)
+        return saved
 
     def _post(self, post_id: str) -> dict:
         post = self.store.get(post_id)
@@ -423,6 +434,8 @@ class App:
             self.cfg["engine"] = data["engine"]
         if "refine_enabled" in data:
             self.cfg["refine_enabled"] = bool(data["refine_enabled"])
+        if "factcheck_auto" in data:
+            self.cfg["factcheck_auto"] = bool(data["factcheck_auto"])
         if "style" in data:
             incoming = data["style"] or {}
             if not (incoming.get("guide") or "").strip():

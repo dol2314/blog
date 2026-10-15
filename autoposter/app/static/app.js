@@ -533,6 +533,7 @@ function renderStyle() {
   $("style-on").checked = has && st.enabled !== false;
   $("style-label").textContent = has ? "내 글투 적용" : "내 글투 적용 (먼저 [글투 학습]을 해 주세요)";
   $("refine-on").checked = Boolean(S.data.refine_enabled);
+  $("factcheck-on").checked = Boolean(S.data.factcheck_auto);
 }
 
 function openStyleModal() {
@@ -581,7 +582,8 @@ function renderFactcheck(p) {
   const box = $("d-fc");
   const fc = p.factcheck;
   if (!fc) {
-    box.hidden = true;
+    box.hidden = false;
+    box.innerHTML = `<div class="fc-reason">아직 팩트체크를 하지 않았습니다. 위의 <b>🔎 공식 자료로 팩트체크</b>를 누르면 글 속 수치·날짜·금액·법 내용을 정부·공공기관 자료와 비교해 맞음/틀림을 알려 드려요.</div>`;
     return;
   }
   box.hidden = false;
@@ -715,7 +717,9 @@ async function writePost() {
       { lane: "ai" },
     );
     await refresh();
-    toastOk("글이 완성됐습니다. 확인하고 발행하세요.");
+    const fc = created.factcheck;
+    const bad = fc ? fc.results.filter((r) => r.verdict === "틀림").length : 0;
+    toastOk(fc ? `글 완성 · 팩트체크 결과 틀린 내용 ${bad}개` : "글이 완성됐습니다. 확인하고 발행하세요.");
     openDrawer(created.id);
   } catch (e) {
     toastError(e);
@@ -870,6 +874,14 @@ function bind() {
   $("refine-on").onchange = async (e) => {
     try {
       S.data = await api("POST", "/api/settings", { refine_enabled: e.target.checked });
+      render();
+    } catch (err) {
+      toastError(err);
+    }
+  };
+  $("factcheck-on").onchange = async (e) => {
+    try {
+      S.data = await api("POST", "/api/settings", { factcheck_auto: e.target.checked });
       render();
     } catch (err) {
       toastError(err);

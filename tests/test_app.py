@@ -237,3 +237,22 @@ def test_review_jobs_need_a_ready_engine(client, monkeypatch):
     assert job["state"] == "error" and "꺼져" in job["error"]
     job = client.job("fix", {"post_id": post["id"]})
     assert job["state"] == "error" and "먼저 팩트체크" in job["error"]
+
+
+def test_auto_factcheck_after_writing(client):
+    client.job("login", answers=["", "tester"])
+    client.app.fact_checker = lambda engine, post, refs, progress: {
+        "checked_at": 1, "engine": engine,
+        "results": [{"claim": "c", "query": "", "verdict": "틀림", "correct": "x", "reason": "", "source_url": "", "checked": []}],
+    }
+    assert client.post("/api/settings", {"factcheck_auto": True}).json()["factcheck_auto"] is True
+    job = client.job("write", {"category": "일상"})
+    assert job["state"] == "done" and job["result"]["factcheck"]["results"][0]["verdict"] == "틀림"
+
+    # 팩트체크가 실패해도 글은 저장된다
+    def broken(*a):
+        raise srv.WriterError("검색 실패")
+
+    client.app.fact_checker = broken
+    job = client.job("write", {"category": "일상"})
+    assert job["state"] == "done" and "factcheck" not in job["result"]
