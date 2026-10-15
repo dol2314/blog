@@ -15,10 +15,10 @@ import webbrowser
 from pathlib import Path
 
 from .. import config
-from .server import App, create_server, log_error
+from .server import App, create_server, log, log_error
 
-HEARTBEAT_TIMEOUT = 180  # 일반 브라우저 탭으로 열린 경우: 이 시간 동안 연락이 없으면 종료
-BYE_GRACE = 6  # 창을 닫은 뒤(새로고침이 아니면) 이 시간 안에 다시 연락이 없으면 종료
+STARTUP_TIMEOUT = 180  # 창이 이 시간 안에 한 번도 연결하지 않으면 종료
+CLOSE_GRACE = 20  # 창과의 연결이 모두 끊긴 뒤(새로고침이 아니면) 이 시간이 지나면 종료
 
 
 def find_app_browser() -> str | None:
@@ -60,22 +60,30 @@ def main() -> int:
     url = f"http://127.0.0.1:{server.server_port}/?t={app.token}"
     threading.Thread(target=server.serve_forever, daemon=True).start()
 
-    proc = None if os.environ.get("AUTOPOSTER_NO_WINDOW") else open_window(url)
+    if not os.environ.get("AUTOPOSTER_NO_WINDOW"):
+        open_window(url)  # 브라우저 프로세스는 다른 프로세스에 창을 넘기고 바로 끝날 수 있어 추적하지 않는다
     if os.environ.get("AUTOPOSTER_PRINT_URL"):
         print(url, flush=True)
+    log(f"앱 시작: {url.split('?')[0]}")
+    started = time.time()
+    reason = "중단"
     try:
         while True:
-            time.sleep(1)
+            time.sleep(0.5)
             now = time.time()
-            if app.closing_at and now - app.closing_at > BYE_GRACE:
+            if app.clients > 0:
+                continue
+            if not app.ever_connected and now - started > STARTUP_TIMEOUT:
+                reason = "앱 창이 연결되지 않음"
                 break
-            if proc is not None and proc.poll() is not None and now - app.last_ping > BYE_GRACE:
-                break
-            if proc is None and now - app.last_ping > HEARTBEAT_TIMEOUT:
+            if app.ever_connected and now - app.last_disconnect > CLOSE_GRACE:
+                reason = "앱 창이 닫힘"
                 break
     except KeyboardInterrupt:
         pass
     finally:
+        log(f"앱 종료: {reason}")
+        app.stopping = True
         server.shutdown()
         app.close()
     return 0

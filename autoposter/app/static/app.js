@@ -23,11 +23,16 @@ const S = {
 // ---- 서버 호출 ----------------------------------------------------------------
 
 async function api(method, path, body) {
-  const res = await fetch(path, {
-    method,
-    headers: { "X-Token": TOKEN, "Content-Type": "application/json" },
-    body: body === undefined ? undefined : JSON.stringify(body),
-  });
+  let res;
+  try {
+    res = await fetch(path, {
+      method,
+      headers: { "X-Token": TOKEN, "Content-Type": "application/json" },
+      body: body === undefined ? undefined : JSON.stringify(body),
+    });
+  } catch {
+    throw new Error("프로그램 본체와 연결이 끊겼습니다. 이 창을 닫고 실행.bat을 다시 실행해 주세요.");
+  }
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.error || `오류 (HTTP ${res.status})`);
   return data;
@@ -727,11 +732,11 @@ function bind() {
   $("d-next").onclick = () => step(1);
 
   // 앱 창이 열려 있다는 신호. 창을 닫으면 프로그램(서버)도 같이 꺼진다.
-  setInterval(() => api("POST", "/api/ping").catch(() => {}), 20000);
+  // 앱 창이 열려 있는 동안 연결을 유지한다. 창을 닫으면 끊겨서 프로그램(본체)도 꺼진다.
+  new EventSource(`/api/events?t=${encodeURIComponent(TOKEN)}`);
   setInterval(() => {
     if (!S.busy.ai && !S.pull) refreshAI();
   }, 15000);
-  window.addEventListener("pagehide", () => navigator.sendBeacon(`/api/bye?t=${encodeURIComponent(TOKEN)}`));
 }
 
 (async function init() {

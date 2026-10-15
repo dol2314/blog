@@ -146,14 +146,30 @@ def test_import_settings_and_delete(client):
     assert client.get("/api/state")["posts"] == []
 
 
-def test_launcher_stops_after_window_closes(monkeypatch):
+def test_launcher_keeps_running_while_window_connected(monkeypatch):
     monkeypatch.setenv("AUTOPOSTER_NO_WINDOW", "1")
-    monkeypatch.setattr(launcher, "BYE_GRACE", 0.3)
-    monkeypatch.setattr(launcher, "App", lambda: client_app)
-    client_app = srv.App(platform_factory=lambda k, cfg: FakePlatform({}))
+    monkeypatch.setenv("AUTOPOSTER_PRINT_URL", "1")
+    monkeypatch.setattr(launcher, "CLOSE_GRACE", 1.0)
+    app = srv.App(platform_factory=lambda k, cfg: FakePlatform({}))
+    monkeypatch.setattr(launcher, "App", lambda: app)
     result = {}
+    urls = []
+    monkeypatch.setattr("builtins.print", lambda *a, **k: urls.append(a[0]))
     thread = threading.Thread(target=lambda: result.setdefault("code", launcher.main()))
     thread.start()
-    client_app.closing_at = time.time()  # 창의 pagehide 신호와 같은 효과
-    thread.join(10)
+    while not urls:
+        time.sleep(0.05)
+    base, query = urls[0].split("/?")
+
+    # 앱 창의 연결이 열려 있는 동안에는 꺼지지 않는다
+    stream = requests.get(f"{base}/api/events?{query}", stream=True, timeout=10)
+    assert stream.status_code == 200
+    time.sleep(2.5)
+    assert thread.is_alive() and app.clients == 1
+    # 다른 주소의 토큰 없는 연결은 거절
+    assert requests.get(f"{base}/api/events?t=wrong", timeout=5).status_code == 403
+
+    # 창을 닫으면(연결이 끊기면) 잠시 뒤 종료
+    stream.close()
+    thread.join(15)
     assert result.get("code") == 0

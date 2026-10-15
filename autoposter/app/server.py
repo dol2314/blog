@@ -134,10 +134,26 @@ class App:
         self.platform = None  # platform 스레드에서만 다룬다
         self.platform_key = None
         self.categories: list[Category] = []
-        self.last_ping = time.time()
-        self.closing_at: float | None = None
+        # 앱 창과 열어 둔 연결(/api/events) 수. 0이 된 채로 시간이 지나면 창이 닫힌 것으로 본다.
+        self.clients = 0
+        self.ever_connected = False
+        self.last_disconnect = time.time()
+        self.stopping = False
+        self._clients_lock = threading.Lock()
         self._load_api_key()
         self.switch_platform(self.cfg.get("last_platform") or "naver")
+
+    def client_connected(self):
+        with self._clients_lock:
+            self.clients += 1
+            self.ever_connected = True
+        log(f"앱 창 연결됨 (연결 {self.clients}개)")
+
+    def client_disconnected(self):
+        with self._clients_lock:
+            self.clients -= 1
+            self.last_disconnect = time.time()
+        log(f"앱 창 연결 끊김 (연결 {self.clients}개)")
 
     # ---- 상태 ---------------------------------------------------------------
 
@@ -413,6 +429,8 @@ def make_handler(app: App):
 
         def do_GET(self):
             path = urlparse(self.path).path
+            if path == "/api/events":
+                return self._events()
             if path.startswith("/api/"):
                 if not self._authorized():
                     return self._json({"error": "인증 실패"}, 403)
@@ -427,11 +445,31 @@ def make_handler(app: App):
                 ctype += "; charset=utf-8"
             self._send(200, file.read_bytes(), ctype)
 
+        def _events(self):
+            """앱 창이 열려 있는 동안 유지되는 연결. 창을 닫으면 끊긴다.
+
+            (EventSource는 헤더를 못 붙이므로 토큰은 주소로 받는다.)
+            """
+            if parse_qs(urlparse(self.path).query).get("t", [""])[0] != app.token:
+                return self._send(403, b"forbidden", "text/plain")
+            self.send_response(200)
+            self.send_header("Content-Type", "text/event-stream")
+            self.send_header("Cache-Control", "no-store")
+            self.end_headers()
+            app.client_connected()
+            try:
+                while not app.stopping:
+                    self.wfile.write(b": keepalive\n\n")
+                    self.wfile.flush()
+                    time.sleep(3)
+            except OSError:
+                pass
+            finally:
+                app.client_disconnected()
+
         def do_POST(self):
             path = urlparse(self.path).path
-            if path == "/api/bye":  # 창을 닫을 때 (sendBeacon은 헤더를 못 붙여 토큰을 주소로 받는다)
-                if parse_qs(urlparse(self.path).query).get("t", [""])[0] == app.token:
-                    app.closing_at = time.time()
+            if path == "/api/bye":  # 예전 화면과의 호환용 (이제는 /api/events 연결로 창 닫힘을 안다)
                 return self._send(204, b"", "text/plain")
             if not self._authorized():
                 return self._json({"error": "인증 실패"}, 403)
@@ -459,8 +497,6 @@ def make_handler(app: App):
 
 
 def route(app: App, method: str, path: str, body: dict):
-    app.last_ping = time.time()
-    app.closing_at = None
     parts = path.strip("/").split("/")[1:]  # "api" 다음
     match (method, *parts):
         case ("GET", "state"):
