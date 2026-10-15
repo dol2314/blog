@@ -64,6 +64,17 @@
           <span>추가 요청</span>
           <textarea id="extra" class="input" rows="2" placeholder="예: 주차 정보 꼭 넣기, 표 대신 목록으로"></textarea>
         </label>
+        <label class="field">
+          <span>참고 자료 <em class="muted small">사실 정확도가 올라가요</em></span>
+          <textarea id="references" class="input" rows="3" placeholder="기사·공식 발표 내용을 붙여넣거나, 주소(URL)를 한 줄에 하나씩 넣으세요. AI가 이 자료 안에서만 수치·날짜를 씁니다."></textarea>
+        </label>
+      </section>
+
+      <section class="side-section">
+        <div class="side-label row between"><span>글투</span>
+          <button class="btn btn-light btn-sm" id="style-btn">글투 학습</button></div>
+        <label class="check"><input type="checkbox" id="style-on"> <span id="style-label">내 글투 적용</span></label>
+        <label class="check"><input type="checkbox" id="refine-on"> AI가 한 번 더 다듬기 <span class="muted small">(시간 약 2배)</span></label>
       </section>
 
       <section class="side-section">
@@ -134,6 +145,14 @@
     <div class="d-label">지표</div>
     <div class="metrics" id="d-metrics"></div>
 
+    <div class="d-label">검토</div>
+    <div class="review-tools">
+      <button class="btn btn-light" id="d-factcheck">🔎 공식 자료로 팩트체크</button>
+      <button class="btn btn-light" id="d-refine">✨ AI로 다듬기</button>
+      <button class="btn btn-ghost btn-sm" id="d-restore" hidden>↩ 이전 버전으로</button>
+    </div>
+    <div class="fc" id="d-fc" hidden></div>
+
     <div class="d-label">제목</div>
     <input id="d-title" class="input input-lg">
 
@@ -171,6 +190,29 @@
     <div class="row end gap8">
       <button class="btn btn-light" id="modal-cancel">취소</button>
       <button class="btn btn-primary" id="modal-ok">확인</button>
+    </div>
+  </div>
+</div>
+
+<!-- 글투 학습 -->
+<div class="modal-wrap" id="style-modal" hidden>
+  <div class="modal modal-wide">
+    <div class="row between"><div class="modal-title">내 글투 학습</div>
+      <button class="icon-btn" id="sm-close" aria-label="닫기">✕</button></div>
+    <div class="muted">내가 쓴 글을 3~5편 넣으면 AI가 말투·문장 끝맺음·구성 방식을 분석해 <b>글투 설명서</b>를 만듭니다.
+      이후 모든 글에 자동으로 반영되고, 설명서는 직접 고칠 수 있어요.</div>
+    <label class="field"><span>① 내 글 넣기</span>
+      <textarea id="sm-samples" class="input" rows="7" placeholder="내가 쓴 글을 붙여넣으세요. 여러 편이면 글 사이에 --- 줄을 넣으세요.&#10;또는 내 블로그 글 주소를 한 줄에 하나씩 넣어도 됩니다.&#10;https://blog.naver.com/아이디/글번호"></textarea></label>
+    <div class="row gap8"><button class="btn btn-primary" id="sm-analyze">글투 분석하기</button>
+      <span class="muted small" id="sm-note">지금 고른 AI 엔진으로 분석합니다.</span></div>
+    <label class="field"><span>② 글투 설명서 <em class="muted small">직접 고쳐도 돼요</em></span>
+      <textarea id="sm-guide" class="input" rows="10" placeholder="분석하면 여기에 설명서가 나옵니다."></textarea></label>
+    <div class="tag-list" id="sm-examples"></div>
+    <div class="row gap8">
+      <button class="btn btn-danger-ghost" id="sm-clear">글투 지우기</button>
+      <div class="grow"></div>
+      <button class="btn btn-light" id="sm-cancel">닫기</button>
+      <button class="btn btn-primary" id="sm-save">저장</button>
     </div>
   </div>
 </div>

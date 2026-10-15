@@ -173,3 +173,67 @@ def test_launcher_keeps_running_while_window_connected(monkeypatch):
     stream.close()
     thread.join(15)
     assert result.get("code") == 0
+
+
+def test_style_references_refine_factcheck_and_fix(client, monkeypatch):
+    app = client.app
+    client.job("login", answers=["", "tester"])
+    app.fetch = lambda url: ("기관 자료", "개정 시행일은 3월 1일입니다")
+
+    # 글투 학습 → 저장
+    app.style_analyzer = lambda engine, text, fetch: {"guide": "- 해요체", "examples": ["좋아요!"], "samples": 2}
+    job = client.job("style", {"samples": "내 글", "engine": "local:qwen3:8b"})
+    assert job["state"] == "done" and job["result"]["guide"] == "- 해요체"
+    state = client.get("/api/state")
+    assert state["style"]["enabled"] is True and state["style"]["examples"] == ["좋아요!"]
+
+    # 다듬기 켜고 참고 자료(글 + 주소)와 함께 글쓰기
+    client.post("/api/settings", {"refine_enabled": True})
+    app.refiner = lambda engine, post, style: Post(post.title + " (다듬음)", post.html, post.tags)
+    job = client.job("write", {"category": "일상", "references": "직접 쓴 메모\nhttps://www.korea.kr/x"})
+    assert job["state"] == "done", job
+    call = fake_write.calls[-1]
+    assert call["style"]["guide"] == "- 해요체"
+    assert "직접 쓴 메모" in call["references"] and "개정 시행일은 3월 1일" in call["references"]
+    post = job["result"]
+    assert post["title"].endswith("(다듬음)") and post["styled"] is True
+
+    # 글투 끄면 다음 글에는 반영 안 됨
+    client.post("/api/settings", {"style": {"guide": "- 해요체", "enabled": False}})
+    client.job("write", {"category": "일상"})
+    assert fake_write.calls[-1]["style"] is None
+
+    # 팩트체크 → 고쳐 쓰기 → 되돌리기
+    seen = {}
+
+    def fake_check(engine, p, refs, progress):
+        seen["refs"] = refs
+        progress("확인 중 (1/1)", 0.0)
+        return {"checked_at": 1, "engine": engine, "results": [
+            {"claim": "시행일은 4월 1일", "query": "", "verdict": "틀림", "correct": "3월 1일",
+             "reason": "", "source_url": "https://www.korea.kr/x", "checked": []}]}
+
+    app.fact_checker = fake_check
+    job = client.job("factcheck", {"post_id": post["id"]})
+    assert job["state"] == "done" and job["result"]["factcheck"]["results"][0]["verdict"] == "틀림"
+    assert "https://www.korea.kr/x" in seen["refs"]
+
+    monkeypatch.setattr("autoposter.factcheck.llm.generate_json",
+                        lambda *a, **k: {"title": "고친 제목", "html": "<p>시행일은 3월 1일</p>", "tags": []})
+    job = client.job("fix", {"post_id": post["id"]})
+    assert job["state"] == "done", job
+    fixed = job["result"]
+    assert "3월 1일" in fixed["html"] and "참고한 공식 자료" in fixed["html"] and fixed["factcheck"]["fixed_at"]
+    assert fixed["previous"]["title"] == post["title"]
+
+    restored = client.post(f"/api/posts/{post['id']}/restore").json()
+    assert restored["title"] == post["title"] and restored["previous"] is None
+
+
+def test_review_jobs_need_a_ready_engine(client, monkeypatch):
+    post = client.post("/api/posts/import", {"name": "a.md", "content": "# 제목\n\n본문"}).json()
+    monkeypatch.setattr(local_ai, "status", lambda session=None: {"running": False, "installed": True, "models": []})
+    job = client.job("factcheck", {"post_id": post["id"], "engine": "local:qwen3:8b"})
+    assert job["state"] == "error" and "꺼져" in job["error"]
+    job = client.job("fix", {"post_id": post["id"]})
+    assert job["state"] == "error" and "먼저 팩트체크" in job["error"]

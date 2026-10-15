@@ -185,6 +185,7 @@ function render() {
   renderCategories();
   renderEngines();
   renderAI();
+  renderStyle();
   renderStats();
   renderFilters();
   renderRows();
@@ -353,7 +354,7 @@ function renderRows() {
       const st = STATUS[p.status] || STATUS.draft;
       return `<tr data-id="${p.id}" class="${p.id === S.openId ? "selected" : ""}">
         <td class="num">${i + 1}</td>
-        <td><span class="t-title">${esc(p.title || "(제목 없음)")}</span>${enginePill(p.engine)}</td>
+        <td><span class="t-title">${esc(p.title || "(제목 없음)")}</span>${enginePill(p.engine)}${fcPill(p)}</td>
         <td><div class="lenbar"><div class="track"><div class="fill" style="width:${pct}%"></div></div><span class="val">${len.toLocaleString()}</span></div></td>
         <td><span class="status ${st.cls}">${st.label}</span></td>
         <td class="nowrap">${esc(platformName(p.platform).replace(" 블로그", ""))}</td>
@@ -373,6 +374,7 @@ function renderBusy() {
   $("d-draft").disabled = p;
   $("d-publish").disabled = p;
   $("write-btn").disabled = a;
+  ["d-factcheck", "d-refine", "d-fix", "sm-analyze"].forEach((id) => $(id) && ($(id).disabled = a));
   $("write-btn").textContent = a ? "AI 작업 중..." : "▶ 글 생성 시작";
   $("platform-seg").querySelectorAll("button").forEach((b) => (b.disabled = p));
 }
@@ -449,6 +451,8 @@ function fillDrawer(id, { keepEdits = false } = {}) {
   renderTagList(p.tags);
   $("d-preview").srcdoc = previewDoc(p);
   $("d-link").hidden = !p.url;
+  $("d-restore").hidden = !p.previous;
+  renderFactcheck(p);
   $("d-publish").textContent = p.status === "published" ? "다시 발행" : "발행하기";
 
   const list = filteredPosts();
@@ -512,6 +516,144 @@ async function publish(draft) {
   }
 }
 
+// ---- 글투 · 다듬기 · 팩트체크 ------------------------------------------------------
+
+function fcPill(p) {
+  const fc = p.factcheck;
+  if (!fc) return "";
+  const bad = fc.results.filter((r) => r.verdict === "틀림").length;
+  if (bad && !fc.fixed_at) return `<span class="pill fc-warn">틀림 ${bad}</span>`;
+  return `<span class="pill fc-pill">팩트체크</span>`;
+}
+
+function renderStyle() {
+  const st = S.data.style || {};
+  const has = Boolean(st.guide);
+  $("style-on").disabled = !has;
+  $("style-on").checked = has && st.enabled !== false;
+  $("style-label").textContent = has ? "내 글투 적용" : "내 글투 적용 (먼저 [글투 학습]을 해 주세요)";
+  $("refine-on").checked = Boolean(S.data.refine_enabled);
+}
+
+function openStyleModal() {
+  const st = S.data.style || {};
+  $("sm-guide").value = st.guide || "";
+  renderExamples(st.examples || []);
+  $("sm-note").textContent = `분석에 쓸 AI: ${currentEngine().label}`;
+  $("style-modal").hidden = false;
+}
+
+function renderExamples(examples) {
+  $("sm-examples").innerHTML = examples.map((e) => `<span class="tag">“${esc(e)}”</span>`).join("");
+}
+
+async function analyzeStyle() {
+  const samples = $("sm-samples").value.trim();
+  if (!samples) return toastError(new Error("내가 쓴 글을 붙여넣거나 글 주소를 넣어 주세요."));
+  try {
+    const st = await runJob("style", { samples, engine: currentEngine().id }, { lane: "ai" });
+    $("sm-guide").value = st.guide;
+    renderExamples(st.examples || []);
+    await refresh();
+    toastOk(`글 ${st.samples}편으로 글투를 분석했습니다. 설명서를 확인하고 저장하세요.`);
+  } catch (e) {
+    toastError(e);
+  }
+}
+
+async function saveStyle(clear = false) {
+  const guide = clear ? "" : $("sm-guide").value.trim();
+  if (clear) {
+    const ok = await showModal({ title: "글투를 지울까요?", text: "저장된 글투 설명서가 지워집니다.", ok: "지우기" });
+    if (ok === null) return;
+  }
+  try {
+    S.data = await api("POST", "/api/settings", { style: { guide, enabled: true } });
+    render();
+    $("style-modal").hidden = true;
+    toastOk(guide ? "글투를 저장했습니다. 이제 새 글에 반영됩니다." : "글투를 지웠습니다.");
+  } catch (e) {
+    toastError(e);
+  }
+}
+
+function renderFactcheck(p) {
+  const box = $("d-fc");
+  const fc = p.factcheck;
+  if (!fc) {
+    box.hidden = true;
+    return;
+  }
+  box.hidden = false;
+  const count = (v) => fc.results.filter((r) => r.verdict === v).length;
+  const cls = { 맞음: "v-ok", 틀림: "v-bad", "확인 불가": "v-unk" };
+  const items = fc.results.length
+    ? fc.results
+        .map(
+          (r) => `<div class="fc-item">
+        <div class="fc-claim"><span class="status ${cls[r.verdict]}">${esc(r.verdict)}</span><span>${esc(r.claim)}</span></div>
+        ${r.verdict === "틀림" && r.correct ? `<div class="fc-correct">→ 공식 자료 기준: ${esc(r.correct)}</div>` : ""}
+        ${r.reason ? `<div class="fc-reason">${esc(r.reason)}</div>` : ""}
+        ${r.source_url ? `<button class="fc-src" data-url="${esc(r.source_url)}">출처: ${esc(r.source_url)}</button>` : ""}
+      </div>`,
+        )
+        .join("")
+    : `<div class="fc-reason">글에서 공식 자료로 확인할 구체적인 사실(수치·날짜·금액·법 내용)을 찾지 못했습니다.</div>`;
+  const needsFix = (count("틀림") || count("확인 불가")) && !fc.fixed_at;
+  box.innerHTML = `
+    <div class="fc-summary">
+      <span class="status v-ok">맞음 ${count("맞음")}</span>
+      <span class="status v-bad">틀림 ${count("틀림")}</span>
+      <span class="status v-unk">확인 불가 ${count("확인 불가")}</span>
+      <span class="muted small">${fmtDate(fc.checked_at)} 확인${fc.fixed_at ? " · 고쳐 쓰기 완료" : ""}</span>
+    </div>
+    ${items}
+    ${needsFix ? `<button class="btn btn-primary" id="d-fix">틀림·확인 불가 부분 고쳐 쓰기</button>` : ""}
+    <div class="fc-note">정부·공공기관 누리집 자료와 넣어 둔 참고 자료로 자동 판정합니다. 판정이 틀릴 수 있으니 출처를 눌러 직접 확인해 주세요.</div>`;
+  box.querySelectorAll(".fc-src").forEach((b) => (b.onclick = () => api("POST", "/api/open", { url: b.dataset.url })));
+  if ($("d-fix")) $("d-fix").onclick = fixPost;
+  renderBusy();
+}
+
+async function reviewJob(name, doneText) {
+  const id = S.openId;
+  try {
+    await flushSave();
+    const saved = await runJob(name, { post_id: id, engine: currentEngine().id }, { lane: "ai" });
+    Object.assign(post(id), saved);
+    render();
+    toastOk(doneText(saved));
+  } catch (e) {
+    toastError(e);
+  }
+}
+
+const runFactcheck = () =>
+  reviewJob("factcheck", (p) => {
+    const bad = p.factcheck.results.filter((r) => r.verdict === "틀림").length;
+    return bad ? `팩트체크 완료 · 틀린 내용 ${bad}개를 찾았습니다` : "팩트체크 완료";
+  });
+const runRefine = () => reviewJob("refine", () => "다듬기 완료 · 마음에 안 들면 [이전 버전으로]를 누르세요");
+async function fixPost() {
+  const ok = await showModal({
+    title: "틀린 부분을 고쳐 쓸까요?",
+    text: "틀림 항목은 공식 자료 기준으로 고치고, 확인 불가 항목은 단정적인 표현을 누그러뜨립니다.\n글 끝에 참고한 공식 자료 목록도 붙입니다.\n(마음에 안 들면 [이전 버전으로]로 되돌릴 수 있어요)",
+    ok: "고쳐 쓰기",
+  });
+  if (ok === null) return;
+  await reviewJob("fix", () => "고쳐 쓰기 완료 · 본문을 확인해 주세요");
+}
+async function restorePost() {
+  try {
+    const saved = await api("POST", `/api/posts/${S.openId}/restore`);
+    Object.assign(post(S.openId), saved);
+    render();
+    toastOk("이전 버전으로 되돌렸습니다");
+  } catch (e) {
+    toastError(e);
+  }
+}
+
 // ---- 동작 ------------------------------------------------------------------------
 
 async function switchPlatform(key) {
@@ -567,6 +709,7 @@ async function writePost() {
         tone: $("tone").value,
         length: Number($("length").value),
         extra: $("extra").value.trim(),
+        references: $("references").value.trim(),
         engine: engine.id,
       },
       { lane: "ai" },
@@ -711,6 +854,30 @@ function bind() {
         $("d-html").hidden = t.dataset.tab !== "html";
       }),
   );
+  $("style-btn").onclick = openStyleModal;
+  $("sm-close").onclick = $("sm-cancel").onclick = () => ($("style-modal").hidden = true);
+  $("sm-analyze").onclick = analyzeStyle;
+  $("sm-save").onclick = () => saveStyle(false);
+  $("sm-clear").onclick = () => saveStyle(true);
+  $("style-on").onchange = async (e) => {
+    try {
+      S.data = await api("POST", "/api/settings", { style: { guide: S.data.style.guide, enabled: e.target.checked } });
+      render();
+    } catch (err) {
+      toastError(err);
+    }
+  };
+  $("refine-on").onchange = async (e) => {
+    try {
+      S.data = await api("POST", "/api/settings", { refine_enabled: e.target.checked });
+      render();
+    } catch (err) {
+      toastError(err);
+    }
+  };
+  $("d-factcheck").onclick = runFactcheck;
+  $("d-refine").onclick = runRefine;
+  $("d-restore").onclick = restorePost;
   $("d-draft").onclick = () => publish(true);
   $("d-publish").onclick = () => publish(false);
   $("d-link").onclick = () => api("POST", "/api/open", { url: post(S.openId).url });

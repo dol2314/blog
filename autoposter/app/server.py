@@ -22,7 +22,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
-from .. import config, local_ai
+from .. import config, factcheck, local_ai, style, web
 from ..cli import PLATFORMS, _has_target, open_platform, parse_tags, post_from_text
 from ..models import Category, Post
 from ..platforms.base import PlatformError
@@ -131,6 +131,11 @@ class App:
         self.ai_runner = Runner("ai")
         self.platform_factory = platform_factory or open_platform
         self.writers = writers or {"local": local_ai.write_post_local, "claude": write_post}
+        self.refiner = style.refine
+        self.style_analyzer = style.analyze
+        self.fact_checker = lambda engine, post, refs, progress: factcheck.run(
+            engine, post, refs, progress, fetch=self.fetch
+        )
         self.platform = None  # platform 스레드에서만 다룬다
         self.platform_key = None
         self.categories: list[Category] = []
@@ -168,6 +173,8 @@ class App:
             "engines": self.engines(),
             "engine": self.cfg.get("engine", DEFAULT_ENGINE),
             "has_api_key": bool(os.environ.get("ANTHROPIC_API_KEY")),
+            "style": self.cfg.get("style") or {},
+            "refine_enabled": bool(self.cfg.get("refine_enabled")),
             "posts": self.store.all(),
         }
 
@@ -273,12 +280,8 @@ class App:
 
     # ---- AI -----------------------------------------------------------------
 
-    def job_write(self, job: Job, params: dict):
-        engine = params.get("engine") or DEFAULT_ENGINE
-        kind, _, model = engine.partition(":")
-        category = next((c for c in self.categories if c.label == params.get("category")), None)
-        if not category:
-            raise PlatformError("카테고리를 먼저 불러와 골라 주세요.")
+    def check_engine(self, engine: str) -> tuple[str, str]:
+        kind, _, model = (engine or "").partition(":")
         if kind == "claude" and not os.environ.get("ANTHROPIC_API_KEY"):
             raise WriterError("Claude를 쓰려면 설정에서 API 키를 넣어 주세요. 키 없이 쓰려면 '내 PC AI'를 고르세요.")
         if kind == "local":
@@ -287,18 +290,101 @@ class App:
                 raise WriterError("내 PC AI(Ollama)가 꺼져 있습니다. 왼쪽 AI 엔진 칸의 안내를 따라 켜 주세요.")
             if not local_ai.has_model(model, st["models"]):
                 raise WriterError(f"'{model}' 모델이 아직 없습니다. [모델 내려받기]를 먼저 눌러 주세요.")
+        if kind not in ("local", "claude"):
+            raise WriterError("AI 엔진을 골라 주세요.")
+        return kind, model
+
+    def style_for_writing(self) -> dict | None:
+        st = self.cfg.get("style") or {}
+        return st if st.get("enabled") and st.get("guide") else None
+
+    @staticmethod
+    def fetch(url: str):
+        return web.fetch_text(url, render=web.render_with_browser)
+
+    def reference_text(self, raw: str) -> str:
+        """참고 자료 칸의 글 + 주소에서 읽어 온 글을 하나로 합친다."""
+        parts = []
+        for ref in factcheck.load_references(raw, self.fetch):
+            head = f"[자료: {ref['title']}{' · ' + ref['url'] if ref['url'] else ''}]"
+            parts.append(f"{head}\n{ref['text'][:3500]}")
+        return "\n\n".join(parts)
+
+    def job_write(self, job: Job, params: dict):
+        engine = params.get("engine") or DEFAULT_ENGINE
+        category = next((c for c in self.categories if c.label == params.get("category")), None)
+        if not category:
+            raise PlatformError("카테고리를 먼저 불러와 골라 주세요.")
+        kind, model = self.check_engine(engine)
         self.cfg["engine"] = engine
         config.save(self.cfg)
+        raw_refs = (params.get("references") or "").strip()
+        references = None
+        if raw_refs:
+            job.update("참고 자료를 읽는 중...")
+            references = self.reference_text(raw_refs)
+        writing_style = self.style_for_writing()
         job.update("AI가 글을 쓰는 중... (내 PC AI는 몇 분 걸릴 수 있습니다)")
         length = int(params.get("length") or 2000)
         post = self.writers[kind](
             category=category.name, topic=params.get("topic") or None, tone=params.get("tone") or "친근한 존댓말",
             length=length, extra=params.get("extra") or None, model=model,
+            style=writing_style, references=references,
         )
+        if self.cfg.get("refine_enabled"):
+            job.update("AI가 글을 다듬는 중...")
+            post = self.refiner(engine, post, writing_style)
         return self.store.add(
             title=post.title, html=post.html, tags=post.tags, category=_category_json(category),
             platform=self.platform_key, engine=engine, topic=params.get("topic") or None,
+            references=raw_refs or None, styled=bool(writing_style),
         )
+
+    def _post(self, post_id: str) -> dict:
+        post = self.store.get(post_id)
+        if not post:
+            raise PlatformError("글을 찾지 못했습니다.")
+        return post
+
+    def job_style(self, job: Job, params: dict):
+        engine = params.get("engine") or self.cfg.get("engine", DEFAULT_ENGINE)
+        self.check_engine(engine)
+        job.update("내 글을 읽고 글투를 분석하는 중...")
+        result = self.style_analyzer(engine, params.get("samples") or "", self.fetch)
+        self.cfg["style"] = {**result, "enabled": True, "updated": time.time()}
+        config.save(self.cfg)
+        return self.cfg["style"]
+
+    def job_refine(self, job: Job, params: dict):
+        post = self._post(params.get("post_id", ""))
+        engine = params.get("engine") or self.cfg.get("engine", DEFAULT_ENGINE)
+        self.check_engine(engine)
+        job.update("AI가 글을 다듬는 중...")
+        out = self.refiner(engine, Post(post["title"], post["html"], post["tags"]), self.style_for_writing())
+        return self.store.update(post["id"], title=out.title, html=out.html, tags=out.tags,
+                                 previous={"title": post["title"], "html": post["html"], "tags": post["tags"]})
+
+    def job_factcheck(self, job: Job, params: dict):
+        post = self._post(params.get("post_id", ""))
+        engine = params.get("engine") or self.cfg.get("engine", DEFAULT_ENGINE)
+        self.check_engine(engine)
+        report = self.fact_checker(
+            engine, Post(post["title"], post["html"], post["tags"]), post.get("references") or "",
+            lambda message, fraction=None: job.update(message, fraction),
+        )
+        return self.store.update(post["id"], factcheck=report)
+
+    def job_fix(self, job: Job, params: dict):
+        post = self._post(params.get("post_id", ""))
+        if not post.get("factcheck"):
+            raise WriterError("먼저 팩트체크를 해 주세요.")
+        engine = params.get("engine") or self.cfg.get("engine", DEFAULT_ENGINE)
+        self.check_engine(engine)
+        job.update("팩트체크 결과대로 글을 고치는 중...")
+        out = factcheck.apply_fixes(engine, Post(post["title"], post["html"], post["tags"]), post["factcheck"])
+        report = {**post["factcheck"], "fixed_at": time.time()}
+        return self.store.update(post["id"], title=out.title, html=out.html, tags=out.tags, factcheck=report,
+                                 previous={"title": post["title"], "html": post["html"], "tags": post["tags"]})
 
     def job_pull(self, job: Job, model: str):
         if model not in local_ai.MODELS:
@@ -335,6 +421,20 @@ class App:
                 self.cfg.pop("anthropic_api_key", None)
         if data.get("engine"):
             self.cfg["engine"] = data["engine"]
+        if "refine_enabled" in data:
+            self.cfg["refine_enabled"] = bool(data["refine_enabled"])
+        if "style" in data:
+            incoming = data["style"] or {}
+            if not (incoming.get("guide") or "").strip():
+                self.cfg.pop("style", None)  # 글투 지우기
+            else:
+                current = self.cfg.get("style") or {}
+                self.cfg["style"] = {
+                    **current,
+                    "guide": incoming["guide"].strip(),
+                    "enabled": bool(incoming.get("enabled", True)),
+                    "updated": time.time(),
+                }
         config.save(self.cfg)
 
     def close(self):
@@ -530,6 +630,23 @@ def route(app: App, method: str, path: str, body: dict):
         case ("POST", "jobs", "write"):
             return app.start_job("write", "글쓰기 준비 중...", lambda job: app.job_write(job, body),
                                  app.ai_runner).to_json()
+        case ("POST", "jobs", "style"):
+            return app.start_job("style", "글투 분석 준비 중...", lambda job: app.job_style(job, body),
+                                 app.ai_runner).to_json()
+        case ("POST", "jobs", "refine"):
+            return app.start_job("refine", "다듬기 준비 중...", lambda job: app.job_refine(job, body),
+                                 app.ai_runner).to_json()
+        case ("POST", "jobs", "factcheck"):
+            return app.start_job("factcheck", "팩트체크 준비 중...", lambda job: app.job_factcheck(job, body),
+                                 app.ai_runner).to_json()
+        case ("POST", "jobs", "fix"):
+            return app.start_job("fix", "고쳐 쓰기 준비 중...", lambda job: app.job_fix(job, body),
+                                 app.ai_runner).to_json()
+        case ("POST", "posts", post_id, "restore"):
+            post = app.store.get(post_id)
+            if not post or not post.get("previous"):
+                raise PlatformError("되돌릴 이전 버전이 없습니다.")
+            return app.store.update(post_id, **post["previous"], previous=None)
         case ("POST", "jobs", "pull"):
             model = body.get("model", "")
             return app.start_job("pull", "모델 내려받기 준비 중...", lambda job: app.job_pull(job, model),

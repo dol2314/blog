@@ -144,13 +144,15 @@ def write_post_local(
     model: str = DEFAULT_MODEL,
     session: requests.Session | None = None,
     attempts: int = 3,
+    style: dict | None = None,
+    references: str | None = None,
 ) -> Post:
     http = _http(session)
     body = {
         "model": model,
         "messages": [
             {"role": "system", "content": SYSTEM_PROMPT + LOCAL_RULES},
-            {"role": "user", "content": build_prompt(category, topic, tone, length, extra)},
+            {"role": "user", "content": build_prompt(category, topic, tone, length, extra, style, references)},
         ],
         "stream": False,
         "think": False,
