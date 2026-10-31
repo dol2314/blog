@@ -6,3 +6,7 @@
 - 지난 경기는 페이지가 KST 기준 시작 4시간 뒤(취소 경기는 시작 시각)에 목록에서 빼고, 1분마다 다시 계산합니다. `schedule.json` 은 10분마다 다시 읽습니다.
 - 중계 표기: K-2T KBS 2TV, M-T MBC, S-T SBS, KN-T KBS N SPORTS, MS-T MBC SPORTS+, SS-T SBS Sports, SPO-T SPOTV, SPO-2T SPOTV2 (`common.js` 의 `CHANNELS`).
 - 미리보기: `cd site/kbo2026 && python -m http.server` 후 http://127.0.0.1:8000
+
+## 워드프레스 적용
+
+`wordpress/` 폴더: 플러그인(`kbo2026-schedule/`, 업로드용 `kbo2026-schedule.zip`), 페이지 4개 블록 내용(`pages/`), `적용가이드.md`, `참고자료.md`. 한 번에 받으려면 `kbo2026-wordpress-전체.zip`. 플러그인을 고친 뒤에는 `cd site/kbo2026/wordpress && zip -qr kbo2026-schedule.zip kbo2026-schedule` 로 zip 을 다시 만드세요.

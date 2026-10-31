@@ -1,0 +1,85 @@
+/* 2026 프로야구 일정 중계 — 플러그인 화면과 안내 글 스타일 (.kbo26 / .kbo26-* 안에서만 적용) */
+.kbo26{--k-ink:#14171c;--k-ink2:#4a5260;--k-ink3:#7a8392;--k-line:#dfe3ea;--k-soft:#eef1f5;--k-red:#fd0000;--k-navy:#0b2a5b;--k-chip:#e8eefb;--k-chipink:#173a7a;--k-live:#e11d48;
+  color:var(--k-ink);margin:0 0 1.5em;word-break:keep-all;overflow-wrap:anywhere;line-height:1.7}
+.kbo26 *{box-sizing:border-box}
+.kbo26 a{text-decoration:none}
+.kbo26-loading{color:#7a8392;font-size:14px}
+
+/* 안내 글 (참고 글 구조: 배경색 소제목 · ▼ 안내 · 빨간 전폭 버튼) */
+h2.kbo26-h2,.kbo26 h2{background:#eef1f5;padding:1em 1.4em;margin:2em 0 1em;font-size:clamp(19px,3.8vw,23px);line-height:1.4;font-weight:800;letter-spacing:-.02em;border:0}
+@media (min-width:640px){h2.kbo26-h2,.kbo26 h2{padding:1.25em 2.375em}}
+.kbo26-pointer,.kbo26 .kbo26-pointer{font-weight:700;margin:1.3em 0 .6em}
+.kbo26-check,.kbo26 .kbo26-check{font-size:18px;font-weight:700;margin:1.2em 0 .4em}
+.kbo26-btn .wp-block-button__link,.kbo26 .kbo26-a{box-sizing:border-box;display:block;width:100%;background:#fd0000!important;color:#fff!important;text-align:center;font-weight:800;font-size:clamp(16px,3.6vw,19px);padding:16px 18px;border-radius:0!important;border:0;text-decoration:none!important;line-height:1.4}
+.kbo26-btn .wp-block-button__link:hover,.kbo26 .kbo26-a:hover{filter:brightness(.92)}
+.kbo26 .kbo26-a{margin:.6em 0 1.4em}
+.kbo26 .kbo26-a.ghost{background:transparent!important;color:var(--k-ink)!important;border:2px solid var(--k-ink)}
+.kbo26-btn{margin-bottom:1.4em}
+
+.kbo26 table{width:100%;border-collapse:collapse;margin:.4em 0 1.4em;font-size:15px}
+.kbo26 th,.kbo26 td{border:1px solid var(--k-line);padding:10px 12px;text-align:left;vertical-align:middle}
+.kbo26 th{background:var(--k-soft);font-weight:700;white-space:nowrap}
+.kbo26 .tw{overflow-x:auto}
+.kbo26 .note{background:var(--k-soft);border-left:4px solid var(--k-navy);padding:12px 16px;font-size:14.5px;color:var(--k-ink2);margin:1em 0 1.4em}
+.kbo26 .title{font-size:clamp(22px,5vw,30px);line-height:1.35;font-weight:900;letter-spacing:-.03em;margin:0 0 4px}
+.kbo26 .meta{font-size:13px;color:var(--k-ink3);margin-bottom:20px}
+
+/* 칩·배지 */
+.kbo26 .chips{display:flex;flex-wrap:wrap;gap:6px;margin:4px 0}
+.kbo26 .chip{display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:700;background:var(--k-chip);color:var(--k-chipink);padding:3px 10px;border-radius:999px;white-space:nowrap}
+.kbo26 .chip.muted{background:var(--k-soft);color:var(--k-ink3)}
+.kbo26 .badge{display:inline-block;font-size:12px;font-weight:700;padding:2px 8px;border:1px solid currentColor;border-radius:4px;line-height:1.5}
+.kbo26 .badge.ps{color:var(--k-red)}
+.kbo26 .badge.intl{color:var(--k-ink3)}
+.kbo26 .badge.live{background:var(--k-live);color:#fff;border-color:var(--k-live)}
+.kbo26 .team{display:inline-flex;align-items:center;gap:8px}
+.kbo26 .team i{width:12px;height:12px;border-radius:50%;flex:none;display:inline-block}
+
+/* 다음 경기 카드 */
+.kbo26[data-kbo="next"]{background:linear-gradient(160deg,#0b2a5b,#123d80 55%,#0b2a5b);padding:18px}
+.kbo26 .next{background:#fff;padding:18px 18px 0;box-shadow:0 10px 30px rgba(0,0,0,.25)}
+.kbo26 .next-head{display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap;font-size:13px;color:var(--k-ink2);font-weight:700}
+.kbo26 .match{display:flex;align-items:center;justify-content:center;gap:14px;margin:14px 0 6px;font-weight:900;font-size:clamp(22px,6vw,30px);letter-spacing:-.03em;flex-wrap:wrap}
+.kbo26 .match small{font-size:14px;color:var(--k-ink3)}
+.kbo26 .where{text-align:center;color:var(--k-ink2);font-size:14.5px;margin:0 0 10px}
+.kbo26 .cd{display:flex;justify-content:center;gap:8px;margin:6px 0 12px}
+.kbo26 .cd div{background:var(--k-navy);color:#fff;min-width:62px;text-align:center;padding:6px 4px;line-height:1.2}
+.kbo26 .cd b{display:block;font-size:22px;font-variant-numeric:tabular-nums}
+.kbo26 .cd span{font-size:11px;opacity:.8}
+.kbo26 .next .chips{justify-content:center}
+.kbo26 .next .kbo26-a{margin:12px -18px 0;width:calc(100% + 36px)}
+
+/* 남은 일정 */
+.kbo26 .stats{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--k-line);border:1px solid var(--k-line);margin:0 0 16px}
+.kbo26 .stats div{background:#fff;padding:12px 10px;text-align:center;font-size:12.5px;color:var(--k-ink3)}
+.kbo26 .stats b{display:block;font-size:20px;color:var(--k-ink);font-weight:900}
+.kbo26 .filters{display:flex;gap:6px;margin:0 0 14px;flex-wrap:wrap}
+.kbo26 .filters button{font:inherit;font-size:14px;padding:6px 14px;border:1px solid var(--k-line);background:#fff;color:var(--k-ink2);border-radius:999px;cursor:pointer;line-height:1.4}
+.kbo26 .filters button[aria-pressed="true"]{background:var(--k-ink);color:#fff;border-color:var(--k-ink)}
+.kbo26 .demo{border:1px dashed var(--k-ink3);padding:12px 14px;margin:0 0 16px;font-size:14px;color:var(--k-ink2)}
+.kbo26 .demo .filters{margin:8px 0 0}
+.kbo26 .day{border:1px solid var(--k-line);margin:0 0 18px;background:#fff}
+.kbo26 .day-head{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:12px 16px;background:var(--k-soft);font-weight:900;flex-wrap:wrap}
+.kbo26 .dday{font-size:13px;color:var(--k-red);font-weight:900}
+.kbo26 .game{display:grid;grid-template-columns:64px 1fr;gap:4px 12px;padding:14px 16px;border-top:1px solid var(--k-line)}
+.kbo26 .day-head+.game{border-top:0}
+.kbo26 .g-time{font-weight:900;font-size:18px;font-variant-numeric:tabular-nums}
+.kbo26 .g-match{font-weight:900;font-size:17px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.kbo26 .g-sub{grid-column:2;font-size:13.5px;color:var(--k-ink3);display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.kbo26 .g-tv{grid-column:2}
+.kbo26 .day .kbo26-a{margin:0;font-size:16px;padding:13px 16px}
+.kbo26 .empty{padding:28px 18px;text-align:center;color:var(--k-ink2);border:1px dashed var(--k-line)}
+
+/* 채널 카드·이동 */
+.kbo26 .chgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px}
+.kbo26 .chcard{display:block;border:1px solid var(--k-line);padding:12px 14px;background:#fff;color:var(--k-ink)}
+.kbo26 .chcard b{display:block}
+.kbo26 .chcard small{color:var(--k-ink3)}
+.kbo26 .chcard:hover{border-color:var(--k-ink)}
+.kbo26 .pager{display:flex;gap:10px;margin-top:8px}
+.kbo26 .pager a,.kbo26 .pager span{flex:1}
+.kbo26 .pager a{border:1px solid var(--k-line);padding:12px 14px;font-size:14px;color:var(--k-ink)}
+.kbo26 .pager small{display:block;color:var(--k-ink3)}
+.kbo26 .pager .nx{text-align:right}
+:target{scroll-margin-top:80px}
+.kbo26 td:first-child{white-space:nowrap}
