@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="claude:viewport-fit-sides" content="cover">
+<title>2026 프로야구 일정 중계</title>
+<meta name="description" content="2026 KBO 프로야구 남은 경기 일정과 날짜별 중계 채널, TV·모바일 시청 방법을 실시간으로 정리합니다.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700;900&display=swap">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="top"><div class="wrap">
+  <a class="logo" href="index.html"><i aria-hidden="true"></i>2026 프로야구 일정 중계</a>
+  <nav class="nav" aria-label="주요 메뉴">
+    <a href="index.html#schedule" aria-current="page">남은 일정</a>
+    <a href="guide-tv.html">TV 중계 채널</a>
+    <a href="guide-tving.html">모바일 시청법</a>
+  </nav>
+</div></header>
+
+<section class="hero"><div class="wrap">
+  <span class="eyebrow"><span class="dot" aria-hidden="true"></span>실시간 남은 일정 · KBO 공식 일정 기준</span>
+  <h1>오늘 야구,<br>어디서 하는지 바로 확인</h1>
+  <p class="sub">끝난 경기는 자동으로 빠지고, 남은 경기만 날짜순으로 보여드립니다. 날짜마다 중계 채널과 TV·모바일로 보는 법을 정리해 두었습니다.</p>
+  <div id="next" class="next" aria-live="polite"><p class="where">일정을 불러오는 중입니다…</p></div>
+</div></section>
+
+<main class="post" style="margin-top:0"><div class="wrap">
+  <div class="stats" id="stats" style="margin-top:0"></div>
+
+  <h2 id="intro-h">2026 프로야구 중계, 이것만 알면 됩니다</h2>
+  <p>오늘 우리 팀 경기는 몇 시에, 어느 채널에서 하는지 매번 찾아보고 계신가요?</p>
+  <p>프로야구는 날짜마다, 경기마다 중계 채널이 다릅니다. 특히 포스트시즌은 지상파와 스포츠 채널이 번갈아 맡기 때문에 아무 채널이나 틀었다가는 첫 이닝을 놓치기 쉽습니다.</p>
+  <p>오늘은 남은 경기 일정과 날짜별 중계 채널, 그리고 TV가 없을 때 휴대폰으로 보는 법까지 한 번에 알려드리도록 하겠습니다.</p>
+
+  <section id="schedule">
+  <h2>1. 남은 경기 일정과 중계 채널</h2>
+  <p>아래 목록은 KBO 공식 일정을 기준으로 하며, 경기가 끝나면 목록에서 자동으로 사라집니다. 채널 이름을 누르면 해당 채널 보는 법으로 이동합니다.</p>
+  <div class="demo" id="demo">
+    <b>데모: 기준 시각 바꿔 보기</b> — 시즌 중이었다면 목록이 어떻게 보였을지 확인해 보세요.
+    <div class="filters" role="group" aria-label="기준 시각">
+      <button type="button" data-at="" aria-pressed="true">지금</button>
+      <button type="button" data-at="2026-10-14T17:00:00+09:00">10월 14일 오후 5시</button>
+      <button type="button" data-at="2026-10-01T15:00:00+09:00">10월 1일 오후 3시</button>
+    </div>
+  </div>
+  <div class="filters" id="filters" role="group" aria-label="경기 구분">
+    <button type="button" data-f="all" aria-pressed="true">전체</button>
+    <button type="button" data-f="kbo">KBO 리그</button>
+    <button type="button" data-f="intl">국제대회</button>
+  </div>
+  <p class="pointer">▼ 날짜별 남은 경기 (날짜 아래 버튼을 누르면 그날 중계 안내로 이동)</p>
+  <div id="list"></div>
+  </section>
+
+  <section id="channels">
+  <h2>2. 중계 채널 한눈에 보기</h2>
+  <p>정규시즌은 하루 다섯 경기를 스포츠 채널 다섯 곳이 나눠 중계하고, 포스트시즌은 지상파 3사가 주로 맡습니다. 채널 번호는 쓰시는 IPTV·케이블마다 달라서 채널별 안내 글에 찾는 법을 정리해 두었습니다.</p>
+  <p class="pointer">▼ 채널을 누르면 보는 법으로 이동합니다</p>
+  <div class="chgrid" id="chgrid"></div>
+  </section>
+
+  <section>
+  <h2>3. TV가 없을 때 휴대폰으로 보는 법</h2>
+  <p>2026 시즌 KBO 리그는 티빙이 유무선 중계를 맡고 있어, 정규시즌과 포스트시즌 모든 경기를 앱으로 볼 수 있습니다.</p>
+  <p>다만 그냥 결제하면 손해일 수 있습니다. 이용권 고르는 법과 무료로 보는 방법을 먼저 확인해 보세요.</p>
+  <p class="pointer">▼ 아래 버튼을 눌러 확인해 보세요</p>
+  <a class="btn" href="guide-tving.html">티빙으로 프로야구 보는 법 확인하기 &gt;&gt;</a>
+  </section>
+
+  <footer>
+    <p id="updated">일정 출처: KBO 공식 일정</p>
+    <p>이 사이트는 KBO·방송사와 관계없는 일정 안내 사이트이며, 방송사 사이트로 바로 연결하지 않습니다. 중계 채널은 방송사 사정으로 바뀔 수 있습니다.</p>
+  </footer>
+</div></main>
+
+<script src="common.js"></script>
+<script>
+let DATA = null, AT = null, FILTER = "all", NEXT = null;
+const $ = s => document.querySelector(s);
+const now = () => AT ? new Date(AT) : new Date();
+
+function remaining(){
+  const n = now();
+  return DATA.games.filter(g => g.a && status(g, n) !== "done")
+    .filter(g => FILTER === "all" || (FILTER === "intl") === (g.sr === "국제대회"));
+}
+
+function renderNext(){
+  const n = now();
+  const g = DATA.games.find(g => g.a && ["live","upcoming"].includes(status(g, n)));
+  NEXT = g;
+  if (!g){ $("#next").innerHTML = `<p class="where">남은 경기가 없습니다. 다음 시즌 일정이 발표되면 자동으로 올라옵니다.</p>`; return; }
+  const live = status(g, n) === "live";
+  $("#next").innerHTML = `
+    <div class="next-head"><span>${live ? '<span class="badge live">진행 중</span>' : "다음 경기"} ${seriesBadge(g)}</span><span>${dateLabel(g.d)} ${esc(g.t)}</span></div>
+    <div class="match">${team(g.a)}<small>vs</small>${team(g.h)}</div>
+    <div class="where">${esc(g.st)} · ${dday(g.d, n) || shortDate(g.d)}</div>
+    <div class="cd" id="cd" aria-label="경기 시작까지 남은 시간"></div>
+    <div class="chips">${tvChips(g)}</div>
+    <a class="btn" href="day.html#${g.d}">${shortDate(g.d)} 중계 채널·시청법 바로가기 &gt;&gt;</a>`;
+  tick();
+}
+
+function tick(){
+  const el = $("#cd"); if (!el || !NEXT) return;
+  let s = Math.max(0, Math.floor((startOf(NEXT) - now()) / 1000));
+  if (!s){ el.innerHTML = `<div style="min-width:160px"><b>경기 중</b><span>지금 중계 중입니다</span></div>`; return; }
+  const parts = [[Math.floor(s/86400),"일"],[Math.floor(s%86400/3600),"시간"],[Math.floor(s%3600/60),"분"],[s%60,"초"]];
+  el.innerHTML = parts.map(([v,l]) => `<div><b>${String(v).padStart(2,"0")}</b><span>${l}</span></div>`).join("");
+}
+
+function renderList(){
+  const n = now(), rows = remaining(), byDay = new Map();
+  rows.forEach(g => { if (!byDay.has(g.d)) byDay.set(g.d, []); byDay.get(g.d).push(g); });
+  const kboLeft = DATA.games.filter(g => g.a && g.sr !== "국제대회" && status(g, n) !== "done").length;
+  const firstDay = byDay.keys().next().value;
+  $("#stats").innerHTML = `<div><b>${rows.length}</b>남은 경기</div><div><b>${firstDay ? shortDate(firstDay) : "-"}</b>다음 경기일</div><div><b>${kboLeft}</b>KBO 리그 남은 경기</div>`;
+  if (!byDay.size){
+    $("#list").innerHTML = `<div class="empty">이 구분에는 남은 경기가 없습니다.<br>새 일정(한국시리즈 대진 확정 등)이 KBO에 올라오면 자동으로 추가됩니다.</div>`; return;
+  }
+  const days = [...byDay].slice(0, 30);
+  $("#list").innerHTML = days.map(([d, gs]) => `
+    <article class="day">
+      <div class="day-head"><span>${dateLabel(d)}</span><span class="dday">${dday(d, n)}</span></div>
+      ${gs.map(g => { const st = status(g, n); return `
+      <div class="game">
+        <div class="g-time">${esc(g.t)}</div>
+        <div class="g-match">${team(g.a)} <small style="color:var(--ink-3)">vs</small> ${team(g.h)}</div>
+        <div class="g-sub">${seriesBadge(g)} ${st === "live" ? '<span class="badge live">진행 중</span>' : ""}${st === "cancel" ? `<span class="badge">${esc(g.n)}</span>` : ""}<span>${esc(g.st)}</span></div>
+        <div class="g-tv chips">${tvChips(g)}</div>
+      </div>`; }).join("")}
+      <a class="btn" href="day.html#${d}">${shortDate(d)} 중계 안내 바로가기 &gt;&gt;</a>
+    </article>`).join("") + (byDay.size > 30 ? `<p class="note">이후 ${byDay.size - 30}일 일정은 날짜가 가까워지면 표시됩니다.</p>` : "");
+}
+
+function renderChannels(){
+  $("#chgrid").innerHTML = Object.values(CHANNELS).map(c =>
+    `<a class="chcard" href="guide-tv.html#${c.key}"><b>📺 ${esc(c.name)}</b><small>${c.kind} · 보는 법 &gt;</small></a>`).join("") +
+    `<a class="chcard" href="guide-tving.html"><b>📱 티빙 (모바일·PC)</b><small>전 경기 · 보는 법 &gt;</small></a>`;
+}
+
+function renderAll(){ renderNext(); renderList(); }
+
+document.querySelectorAll("#demo button").forEach(b => b.onclick = () => {
+  AT = b.dataset.at || null;
+  document.querySelectorAll("#demo button").forEach(x => x.setAttribute("aria-pressed", x === b));
+  renderAll();
+});
+document.querySelectorAll("#filters button").forEach(b => b.onclick = () => {
+  FILTER = b.dataset.f;
+  document.querySelectorAll("#filters button").forEach(x => x.setAttribute("aria-pressed", x === b));
+  renderList();
+});
+
+async function refresh(){
+  try {
+    DATA = await loadSchedule();
+    const u = DATA.updated.replace("T", " ").slice(0, 16);
+    $("#updated").textContent = `일정 출처: ${DATA.source} · 마지막 갱신 ${u} (KST)`;
+    renderAll();
+  } catch (e) { $("#next").innerHTML = `<p class="where">${esc(e.message)}. 잠시 후 다시 시도해 주세요.</p>`; }
+}
+renderChannels();
+refresh();
+setInterval(tick, 1000);
+setInterval(() => DATA && renderAll(), 60e3);   // 1분마다 지난 경기 자동 제외
+setInterval(refresh, 10 * 60e3);                // 10분마다 새 일정·점수 반영
+</script>
+</body>
+</html>

@@ -28,3 +28,7 @@ To upgrade, bump the version in `.mcp.json` and re-copy the skill from the match
 ## modubaro.com redesign
 
 `site/modubaro/` holds the GeneratePress skin for modubaro.com: `custom.css` (paste into Customizer > Additional CSS), `home-page.html` (block markup for a static front page with hero, search, category cards and a latest-posts grid) and an apply guide. Preview changes by injecting the CSS into the live pages with Playwright; never push changes to the live site from here.
+
+## 2026 프로야구 일정 중계 (demo)
+
+`site/kbo2026/` is a static demo site: remaining KBO games with past games auto-hidden by KST time, per-date broadcast pages (`day.html#date`) and guide pages that link only internally. `update_schedule.py` regenerates `schedule.json` from the KBO schedule API (`koreabaseball.com/ws/Schedule.asmx/GetScheduleList`, one request per series id × month). See its README.
