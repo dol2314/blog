@@ -270,7 +270,10 @@ a:hover { color: var(--mb-accent-2); }
 .wp-block-latest-posts.mb-latest .wp-block-latest-posts__post-title { display: block; padding: 18px 20px 0; font-size: 18px; font-weight: 750; line-height: 1.42;
   letter-spacing: -.025em; color: var(--mb-ink); text-decoration: none; }
 .wp-block-latest-posts.mb-latest .wp-block-latest-posts__post-title:hover { color: var(--mb-accent); }
-.wp-block-latest-posts.mb-latest .wp-block-latest-posts__post-excerpt { padding: 8px 20px 20px; margin: 0; color: var(--mb-sub); font-size: 15px; line-height: 1.7; }
+.wp-block-latest-posts.mb-latest .wp-block-latest-posts__post-excerpt {
+  margin: 8px 20px 20px; padding: 0; color: var(--mb-sub); font-size: 15px; line-height: 1.7;
+  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
+}
 
 @media (max-width: 960px) {
   .mb-hero { grid-template-columns: 1fr; }
