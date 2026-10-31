@@ -152,6 +152,13 @@ a:hover { color: var(--mb-accent-2); }
 .post-navigation .nav-previous, .post-navigation .nav-next { font-weight: 600; }
 
 /* ---- 바닥글 --------------------------------------------------------------- */
+.footer-widgets { background: #fff; border-top: 1px solid var(--mb-line); color: var(--mb-sub); font-size: 14px; }
+.footer-widgets .inside-footer-widgets { padding-top: 28px; padding-bottom: 28px; }
+.footer-widgets .widget-title { font-size: 14px; font-weight: 800; color: var(--mb-ink); }
+.footer-widgets ul { display: flex; flex-wrap: wrap; gap: 6px 18px; margin: 0; padding: 0; list-style: none; }
+.footer-widgets ul li { margin: 0; }
+.footer-widgets a { color: var(--mb-sub); text-decoration: none; }
+.footer-widgets a:hover { color: var(--mb-accent); }
 .site-info { background: var(--mb-ink); color: #aeb8c4; font-size: 14px; }
 .site-info a { color: #dfe6ee; }
 .inside-site-info { padding-top: 28px; padding-bottom: 28px; }
