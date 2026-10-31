@@ -10,3 +10,7 @@
 ## 워드프레스 적용
 
 `wordpress/` 폴더: 플러그인(`kbo2026-schedule/`, 업로드용 `kbo2026-schedule.zip`), 페이지 4개 블록 내용(`pages/`), `적용가이드.md`, `참고자료.md`. 한 번에 받으려면 `kbo2026-wordpress-전체.zip`. 플러그인을 고친 뒤에는 `cd site/kbo2026/wordpress && zip -qr kbo2026-schedule.zip kbo2026-schedule` 로 zip 을 다시 만드세요.
+
+## Cloudflare Pages
+
+`cloudflare/` 폴더가 배포용 사본입니다(데모 버튼 제거, 파비콘·설명 추가). `functions/api/schedule.js` 가 이번 달·다음 달 일정을 KBO 에서 받아 30분 캐시하고, 실패하면 `schedule.json` 으로 대체합니다. 배포 방법은 `cloudflare/배포가이드.md`, 묶음은 `kbo2026-cloudflare.zip`. 랜딩·공용 파일을 고치면 `cloudflare/` 쪽에도 반영하세요.
