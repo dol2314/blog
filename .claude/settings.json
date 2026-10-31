@@ -1,3 +1,16 @@
 {
-  "enabledMcpjsonServers": ["rea"]
+  "enabledMcpjsonServers": ["rea"],
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/skills/motionsites-web-builder/fetch-samples.sh\"",
+            "timeout": 120
+          }
+        ]
+      }
+    ]
+  }
 }
