@@ -24,3 +24,7 @@ To upgrade, bump the version in `.mcp.json` and re-copy the skill from the match
 ## MotionSites web builder skill
 
 `.claude/skills/motionsites-web-builder/` is the MotionSites Web Builder skill from [Motionsites-AI/claude-skill](https://github.com/Motionsites-AI/claude-skill) v1.0.0. Only the MIT parts (SKILL.md, references, scripts, LICENSE) are committed; the sponsor/upsell section was removed from SKILL.md. Its `examples/` and `media/` folders are © MotionSites and must not be redistributed, so they are git-ignored and a SessionStart hook in `.claude/settings.json` runs `fetch-samples.sh` to clone them from the v1.0.0 tag (no-op when present, never blocks startup).
+
+## modubaro.com redesign
+
+`site/modubaro/` holds the GeneratePress skin for modubaro.com: `custom.css` (paste into Customizer > Additional CSS), `home-page.html` (block markup for a static front page with hero, search, category cards and a latest-posts grid) and an apply guide. Preview changes by injecting the CSS into the live pages with Playwright; never push changes to the live site from here.
