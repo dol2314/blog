@@ -4,3 +4,6 @@ __pycache__/
 .venv/
 api_key.txt
 *.whl
+# MotionSites 예시·미디어(© MotionSites, 재배포 불가): 공개 레포에 올리지 않는다
+.claude/skills/motionsites-web-builder/examples/
+.claude/skills/motionsites-web-builder/media/

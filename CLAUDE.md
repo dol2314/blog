@@ -20,3 +20,7 @@ To upgrade, bump the version in `.mcp.json` and re-copy the skill from the match
 ## YouTube agent skills
 
 `.claude/skills/yt-*` are the eleven YouTube skills from [Jakeschincariol/youtube-agent-skill](https://github.com/Jakeschincariol/youtube-agent-skill)@a2feb21 (MIT, licence in `.claude/youtube/LICENSE-youtube-agent-skill`). Their Python tools are stdlib-only and read local files. The voice profile template is `.claude/youtube/voice.md`; the skills were edited only to also read that project path. The hook scorer and title linter are calibrated on English.
+
+## MotionSites web builder skill
+
+`.claude/skills/motionsites-web-builder/` is the MotionSites Web Builder skill from [Motionsites-AI/claude-skill](https://github.com/Motionsites-AI/claude-skill) v1.0.0. Only the MIT parts (SKILL.md, references, scripts, LICENSE) are committed; the sponsor/upsell section was removed from SKILL.md. Its `examples/` and `media/` folders are © MotionSites and must not be redistributed, so they are git-ignored; copy them from the v1.0.0 release into the skill folder when needed.
