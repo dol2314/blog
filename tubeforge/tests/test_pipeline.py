@@ -130,3 +130,12 @@ def test_render_short_clip(tmp_path, vtype, size):
         assert tuple(v.size) == size
         assert abs(v.duration - (tts.duration + 0.4)) < 0.15
         assert v.audio is not None
+
+
+def test_auto_falls_back_to_template_when_provider_fails(monkeypatch):
+    monkeypatch.setattr(sg, "pick_provider", lambda name: "ollama")
+    monkeypatch.setattr(sg, "_ollama", lambda p, m: (_ for _ in ()).throw(RuntimeError("down")))
+    s = generate_script("주제", "shorts", 30, provider="auto")
+    assert s.provider == "template"
+    with pytest.raises(RuntimeError):
+        generate_script("주제", "shorts", 30, provider="ollama")

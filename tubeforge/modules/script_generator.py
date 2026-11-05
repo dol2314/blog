@@ -177,13 +177,29 @@ def _ollama(prompt: str, model: str | None) -> dict:
     import requests
 
     host = env("OLLAMA_HOST", "http://127.0.0.1:11434").rstrip("/")
-    r = requests.post(f"{host}/api/chat", timeout=600, json={
-        "model": model or env("OLLAMA_MODEL", "qwen3:8b"),
+    model = model or _ollama_model(host)
+    print(f"  Ollama 모델: {model} (처음엔 몇 분 걸릴 수 있습니다)")
+    r = requests.post(f"{host}/api/chat", timeout=900, json={
+        "model": model,
         "messages": [{"role": "system", "content": SYSTEM}, {"role": "user", "content": prompt + " /no_think"}],
         "format": SCHEMA, "stream": False, "options": {"temperature": 0.7},
     })
     r.raise_for_status()
     return _parse_json(r.json()["message"]["content"])
+
+
+def _ollama_model(host: str) -> str:
+    """설정한 모델이 없으면 설치된 qwen3 → 아무 모델 순으로 고른다."""
+    import requests
+
+    want = env("OLLAMA_MODEL", "qwen3:8b")
+    names = [m["name"] for m in requests.get(f"{host}/api/tags", timeout=5).json().get("models", [])]
+    if not names:
+        raise RuntimeError("Ollama 에 설치된 모델이 없습니다. 명령 프롬프트에서: ollama pull qwen3:8b")
+    for n in [want, want + ":latest"]:
+        if n in names:
+            return n
+    return next((n for n in names if n.startswith("qwen3")), names[0])
 
 
 def _template(topic: str, video_type: str, seconds: int, source_text: str | None) -> dict:
@@ -224,7 +240,9 @@ def pick_provider(name: str) -> str:
 
 def generate_script(topic: str, video_type: str = "shorts", seconds: int = 30, provider: str = "auto",
                     source_text: str | None = None, model: str | None = None) -> VideoScript:
-    provider = pick_provider(provider or env("SCRIPT_PROVIDER", "auto"))
+    requested = provider if provider and provider != "auto" else env("SCRIPT_PROVIDER", "auto")
+    auto = requested == "auto"
+    provider = pick_provider(requested)
     if provider == "template":
         data = _template(topic, video_type, seconds, source_text)
     else:
@@ -232,7 +250,13 @@ def generate_script(topic: str, video_type: str = "shorts", seconds: int = 30, p
         fn = {"claude": _claude, "openai": _openai, "ollama": _ollama}.get(provider)
         if fn is None:
             raise ValueError(f"알 수 없는 대본 공급자: {provider}")
-        data = fn(prompt, model)
+        try:
+            data = fn(prompt, model)
+        except Exception as e:
+            if not auto:
+                raise
+            print(f"  ※ {provider} 대본 생성 실패 → 예시 대본으로 계속합니다: {e}")
+            provider, data = "template", _template(topic, video_type, seconds, source_text)
     scenes = [Scene(section=s.get("section", "body"), text=s["text"].strip(), visual=s.get("visual", ""))
               for s in data["scenes"] if s.get("text", "").strip()]
     if not scenes:
