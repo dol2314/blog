@@ -1,0 +1,12 @@
+.env
+output/
+youtube_token.json
+client_secret*.json
+__pycache__/
+*.pyc
+assets/bgm/*.mp3
+assets/bgm/*.wav
+assets/backgrounds/*
+!assets/backgrounds/README.md
+assets/fonts/*.ttf
+assets/fonts/*.otf
