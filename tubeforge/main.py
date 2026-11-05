@@ -11,13 +11,10 @@
 from __future__ import annotations
 
 import argparse
-import json
 import sys
 import time
-from datetime import datetime
 from pathlib import Path
 
-from modules.config import ROOT, slugify
 
 
 def parse_args(argv=None):
@@ -56,61 +53,44 @@ def step(msg: str):
 
 def main(argv=None) -> Path:
     a = parse_args(argv)
-    from modules.script_generator import VideoScript, generate_script
+    from modules import pipeline
+
+    say = lambda msg, frac=None: print(f"  {msg}", flush=True)  # noqa: E731
 
     # 1) 대본
     t0 = step("대본 생성")
     if a.from_script:
-        src = Path(a.from_script)
-        script = VideoScript.from_dict(json.loads(src.read_text(encoding="utf-8")))
-        out = Path(a.out) if a.out else src.parent
+        out = Path(a.from_script).parent if not a.out else Path(a.out)
+        script = pipeline.load_script(Path(a.from_script).parent)
+        if a.out:
+            out.mkdir(parents=True, exist_ok=True)
+            pipeline.save_script(script, out)
     else:
         source_text = Path(a.source).read_text(encoding="utf-8") if a.source else None
-        script = generate_script(a.topic, a.type, a.duration, a.provider or "auto", source_text, a.model)
-        stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        out = Path(a.out) if a.out else ROOT / "output" / f"{stamp}_{slugify(a.topic)}"
-    out.mkdir(parents=True, exist_ok=True)
-    print(f"  공급자: {script.provider} · 제목: {script.title} · 장면 {len(script.scenes)}개")
+        out = Path(a.out) if a.out else None
+        if out:
+            out.mkdir(parents=True, exist_ok=True)
+        script, out = pipeline.make_script(a.topic, a.type, a.duration, a.provider or "auto", source_text,
+                                           a.model, out, say)
+    print(f"  공급자: {script.provider} · 제목: {script.title} · 장면 {len(script.scenes)}개 · {time.time() - t0:.1f}초")
     if script.provider == "template":
         print("  ※ API 키/Ollama 가 없어 예시 대본(template)으로 만들었습니다. .env 에 키를 넣으면 AI 대본으로 바뀝니다.")
-    (out / "script.json").write_text(json.dumps(script.to_dict(), ensure_ascii=False, indent=2), encoding="utf-8")
-    print(f"  {time.time() - t0:.1f}초")
     if a.script_only:
-        (out / "script.md").write_text(script.to_markdown(), encoding="utf-8")
         print(f"\n대본: {out / 'script.md'}")
         return out
 
-    # 2) 음성
-    from modules.tts_engine import get_engine, write_srt
-
-    t0 = step("음성 합성")
-    engine = get_engine(a.tts, a.voice, a.rate)
-    tts = engine.synthesize(script.scenes, out / "audio", max_chars=16 if script.video_type == "shorts" else 28)
-    write_srt(tts.cues, out / "captions.srt")
-    # 실제 음성 길이로 맞춘 타임스탬프 저장
-    (out / "script.json").write_text(json.dumps(script.to_dict(), ensure_ascii=False, indent=2), encoding="utf-8")
-    (out / "script.md").write_text(script.to_markdown(), encoding="utf-8")
-    print(f"  엔진: {engine.name} · 길이 {tts.duration:.1f}초 · 자막 {len(tts.cues)}개 · {time.time() - t0:.1f}초")
-
-    # 3) 영상
-    from modules.video_composer import compose_video, make_thumbnail
-
-    t0 = step("영상 렌더링")
-    video = compose_video(script, tts, out / "final.mp4", bg=a.bg, bgm=a.bgm, preset=a.preset)
-    thumb = make_thumbnail(script, out / "thumbnail.jpg", bg=a.bg)
-    print(f"  {time.time() - t0:.1f}초")
+    # 2) 음성 + 3) 영상
+    t0 = step("음성 합성 · 영상 렌더링")
+    result = pipeline.render(script, out, a.tts, a.voice, a.rate, a.bg, a.bgm, a.preset, say, cli=True)
+    print(f"  길이 {result['duration']:.1f}초 · {time.time() - t0:.1f}초")
 
     # 4) 업로드
     if a.upload:
-        from modules.youtube_uploader import upload_video
-
-        t0 = step("유튜브 업로드")
-        desc = script.description + "\n\n" + script.timestamps() if script.video_type == "long" else script.description
-        vid = upload_video(video, script.title, desc, script.tags, a.privacy, a.publish_at,
-                           thumbnail=thumb, captions=out / "captions.srt", shorts=script.video_type == "shorts")
+        step("유튜브 업로드")
+        vid = pipeline.upload(script, out, a.privacy, a.publish_at, say)
         print(f"  https://youtu.be/{vid} ({'예약 ' + a.publish_at if a.publish_at else a.privacy})")
 
-    print(f"\n완료: {video}")
+    print(f"\n완료: {result['video']}")
     return out
 
 

@@ -192,7 +192,9 @@ class Layer:
 
 
 def compose_video(script: VideoScript, tts: TTSResult, out_path: Path, bg: str | None = None,
-                  bgm: str | None = None, preset: str = "veryfast", show_title: bool = True) -> Path:
+                  bgm: str | None = None, preset: str = "veryfast", show_title: bool = True,
+                  logger="bar") -> Path:
+    """logger: moviepy(proglog) 진행 표시. "bar"=터미널 막대, None=조용히, 또는 ProgressBarLogger 객체."""
     from bisect import bisect_right
 
     from moviepy import VideoClip, concatenate_videoclips
@@ -251,7 +253,7 @@ def compose_video(script: VideoScript, tts: TTSResult, out_path: Path, bg: str |
     out_path.parent.mkdir(parents=True, exist_ok=True)
     video.write_videofile(str(out_path), fps=FPS, codec="libx264", audio_codec="aac", audio_bitrate="192k",
                           preset=preset, threads=4, pixel_format="yuv420p",
-                          ffmpeg_params=["-movflags", "+faststart"], logger="bar")
+                          ffmpeg_params=["-movflags", "+faststart"], logger=logger)
     for c in to_close + bg_clips:
         try:
             c.close()

@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TubeForge</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%234f46e5'/%3E%3Cpath d='M12 9l11 7-11 7z' fill='white'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="shell">
+  <aside class="side">
+    <a class="brand" href="#/home"><span class="logo"><svg viewBox="0 0 24 24" width="16" height="16"><path d="M8 5l12 7-12 7z" fill="currentColor"/></svg></span>TubeForge</a>
+    <nav>
+      <a href="#/home" data-nav="home"><i>🏠</i>홈</a>
+      <a href="#/new" data-nav="new" class="cta"><i>＋</i>새 영상 만들기</a>
+      <a href="#/projects" data-nav="projects"><i>🎞️</i>내 프로젝트</a>
+      <a href="#/settings" data-nav="settings"><i>⚙️</i>설정</a>
+    </nav>
+    <div class="side-foot">
+      <div id="jobDock" class="job-dock" hidden></div>
+      <div class="engine" id="engineInfo"></div>
+    </div>
+  </aside>
+  <main id="view" class="main"><div class="loading">불러오는 중…</div></main>
+</div>
+<div id="toast" class="toast" hidden></div>
+<script src="app.js"></script>
+</body>
+</html>
