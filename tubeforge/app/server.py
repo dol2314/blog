@@ -42,6 +42,9 @@ SETTINGS = [
     ("OPENAI_MODEL", "OpenAI 모델", "gpt-4o-mini"),
     ("OLLAMA_HOST", "Ollama 주소", "http://127.0.0.1:11434"),
     ("OLLAMA_MODEL", "Ollama 모델", "qwen3:8b"),
+    ("GEMINI_API_KEY", "Google(Gemini) API 키", ""),
+    ("GEMINI_IMAGE_MODEL", "이미지 모델", "gemini-2.5-flash-image"),
+    ("IMAGE_STYLE", "그림체", "photo"),
     ("TTS_ENGINE", "음성 엔진", "edge"),
     ("EDGE_VOICE", "기본 목소리", "ko-KR-SunHiNeural"),
     ("EDGE_RATE", "말하기 속도", "+10%"),
@@ -51,7 +54,7 @@ SETTINGS = [
     ("BGM_DUCK_VOLUME", "BGM 볼륨(말할 때)", "0.08"),
     ("FONT_PATH", "자막 폰트 경로", ""),
 ]
-SECRET_KEYS = {"ANTHROPIC_API_KEY", "OPENAI_API_KEY", "ELEVENLABS_API_KEY"}
+SECRET_KEYS = {"ANTHROPIC_API_KEY", "OPENAI_API_KEY", "ELEVENLABS_API_KEY", "GEMINI_API_KEY"}
 
 
 class Job:
@@ -104,6 +107,7 @@ class App:
 
     # ── 상태 ──
     def state(self) -> dict:
+        from modules.image_generator import STYLE_LABELS, image_available
         from modules.script_generator import pick_provider
 
         return {
@@ -113,6 +117,9 @@ class App:
             "default_voice": env("EDGE_VOICE", "ko-KR-SunHiNeural"),
             "default_rate": env("EDGE_RATE", "+10%"),
             "tts": env("TTS_ENGINE", "edge"),
+            "images_ready": image_available(),
+            "image_style": env("IMAGE_STYLE", "photo"),
+            "image_styles": STYLE_LABELS,
             "assets": list_assets(),
             "youtube_ready": (ROOT / env("YOUTUBE_CLIENT_SECRETS", "client_secret.json")).exists(),
             "jobs": [j.to_json() for j in self.jobs.values() if j.status in ("queued", "running")],
@@ -359,13 +366,37 @@ def make_handler(app: App):
                 if "scenes" in d:
                     from modules.script_generator import Scene
 
+                    def image_of(v):  # 프로젝트 안 images/ 의 실제 파일만 인정
+                        v = (v or "").strip()
+                        ok = re.fullmatch(r"images/[\w.\-]+\.png", v) and (d0 / v).exists()
+                        return v if ok else ""
+
                     script.scenes = [Scene(section=s.get("section", "body"), text=s["text"].strip(),
-                                           visual=s.get("visual", "")) for s in d["scenes"] if s.get("text", "").strip()]
+                                           visual=s.get("visual", ""), image_prompt=(s.get("image_prompt") or "").strip(),
+                                           image=image_of(s.get("image")))
+                                     for s in d["scenes"] if s.get("text", "").strip()]
                     if not script.scenes:
                         raise ValueError("장면이 하나 이상 있어야 합니다.")
                     script.estimate_timings()
                 pipeline.save_script(script, d0)
                 return self.json(project_json(m.group(1)))
+
+            if method == "POST" and (m := re.fullmatch(r"/api/projects/([^/]+)/images", path)):
+                pid = m.group(1)
+                d0 = project_dir(pid)
+                if app.busy_project(pid):
+                    raise ValueError("이 프로젝트는 이미 작업 중입니다.")
+                indices = d.get("indices")
+                if indices is not None:
+                    indices = [int(i) for i in indices]
+                force = bool(d.get("force"))
+
+                def run(job: Job):
+                    script = pipeline.load_script(d0)
+                    failed = pipeline.make_images(script, d0, indices=indices, force=force, progress=job.update)
+                    return {"project": pid, "failed": failed}
+
+                return self.json(app.submit("images", pid, run).to_json())
 
             if method == "POST" and (m := re.fullmatch(r"/api/projects/([^/]+)/render", path)):
                 pid = m.group(1)
@@ -375,12 +406,13 @@ def make_handler(app: App):
                 bg = asset_path("backgrounds", d.get("bg"))
                 bgm = asset_path("bgm", d.get("bgm"))
                 opts = dict(tts=d.get("tts") or None, voice=d.get("voice") or None, rate=d.get("rate") or None,
-                            bg=bg, bgm=bgm, preset=d.get("preset") or "veryfast")
+                            bg=bg, bgm=bgm, preset=d.get("preset") or "veryfast",
+                            images=d.get("images") if isinstance(d.get("images"), bool) else None)
 
                 def run(job: Job):
                     script = pipeline.load_script(d0)
                     r = pipeline.render(script, d0, progress=job.update, **opts)
-                    return {"project": pid, "duration": round(r["duration"], 1)}
+                    return {"project": pid, "duration": round(r["duration"], 1), "image_errors": r["image_errors"]}
 
                 return self.json(app.submit("render", pid, run).to_json())
 

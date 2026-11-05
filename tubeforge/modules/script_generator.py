@@ -22,9 +22,11 @@ CHARS_PER_SEC = 6.8
 class Scene:
     section: str  # hook | body | cta
     text: str  # 읽을 문장 (1~2문장)
-    visual: str = ""  # 화면 키워드/배경 검색어
+    visual: str = ""  # 화면 키워드 (한국어)
     start: float = 0.0
     end: float = 0.0
+    image_prompt: str = ""  # 장면 이미지 생성용 영어 묘사
+    image: str = ""  # 프로젝트 폴더 기준 이미지 경로 (예: images/scene_00.png)
 
 
 @dataclass
@@ -69,8 +71,9 @@ class VideoScript:
     @classmethod
     def from_dict(cls, d: dict) -> "VideoScript":
         d = dict(d)
-        d["scenes"] = [Scene(**s) for s in d.get("scenes", [])]
-        return cls(**d)
+        keys = set(Scene.__dataclass_fields__)
+        d["scenes"] = [Scene(**{k: v for k, v in s.items() if k in keys}) for s in d.get("scenes", [])]
+        return cls(**{k: v for k, v in d.items() if k in cls.__dataclass_fields__})
 
 
 # ──────────────────────────────── 프롬프트 ────────────────────────────────
@@ -89,8 +92,9 @@ SCHEMA = {
                     "section": {"type": "string", "enum": ["hook", "body", "cta"]},
                     "text": {"type": "string"},
                     "visual": {"type": "string"},
+                    "image_prompt": {"type": "string"},
                 },
-                "required": ["section", "text", "visual"],
+                "required": ["section", "text", "visual", "image_prompt"],
                 "additionalProperties": False,
             },
         },
@@ -104,6 +108,9 @@ SYSTEM = """당신은 한국어 유튜브 대본 작가입니다. 시청 지속�
 - 구조: hook(첫 장면, 3초 안에 궁금증·반전·숫자로 붙잡기) → body(핵심 정보, 한 장면에 한 가지) → cta(마지막 장면, 구독·댓글 유도 한 문장).
 - 장면 text 는 소리 내어 읽기 좋은 구어체 1~2문장. 한 장면 15~45자. 이모지·괄호·특수기호·영문 약어 남발 금지(TTS가 읽음).
 - visual 은 그 장면 배경으로 쓸 화면 키워드(한국어 2~4단어).
+- image_prompt 는 그 장면 배경 사진을 AI 로 만들 영어 묘사 1~2문장: 무엇이·어디서·어떤 구도(close-up, wide shot 등)·빛.
+  한국 생활 장면이면 Korean apartment, Korean people 처럼 배경을 구체적으로. 글자·숫자·간판·로고·실존 인물·유명인은 넣지 않습니다.
+  장면끼리 같은 영상처럼 이어지게 장소·인물 설정을 일관되게 유지합니다.
 - 확인되지 않은 사실·루머·실명 비방·선정적 표현은 쓰지 않습니다. 원문(기사)이 주어지면 그 안의 사실만 씁니다.
 - title 은 40자 이내, 클릭하고 싶지만 낚시가 아닌 제목. description 은 2~3문장 요약. tags 는 5~10개.
 - 반드시 JSON 만 출력합니다."""
@@ -215,9 +222,18 @@ def _template(topic: str, video_type: str, seconds: int, source_text: str | None
         "세 번째, 실제로 확인할 때는 공식 발표를 먼저 보세요.",
         "마지막으로, 앞으로 어떻게 될지는 조금 더 지켜봐야 합니다.",
     ]
-    scenes = [{"section": "hook", "text": f"{topic}, {seconds}초 만에 핵심만 정리해 드립니다.", "visual": topic}]
-    scenes += [{"section": "body", "text": t, "visual": topic} for t in body]
-    scenes.append({"section": "cta", "text": "도움이 됐다면 구독하고, 궁금한 점은 댓글로 남겨 주세요.", "visual": "구독"})
+    shots = ["wide shot of a cozy modern Korean apartment living room in winter, warm evening light",
+             "close-up of a person's hands adjusting a home thermostat, soft window light",
+             "a person in a warm knit sweater reading on a sofa under a blanket, natural light",
+             "close-up of a steaming mug of tea on a wooden table by a frosty window",
+             "wide shot of a quiet snowy Korean apartment complex at dusk, warm lit windows",
+             "a family preparing dinner together in a bright Korean kitchen, candid moment"]
+    scenes = [{"section": "hook", "text": f"{topic}, {seconds}초 만에 핵심만 정리해 드립니다.", "visual": topic,
+               "image_prompt": shots[0]}]
+    scenes += [{"section": "body", "text": t, "visual": topic, "image_prompt": shots[(i + 1) % len(shots)]}
+               for i, t in enumerate(body)]
+    scenes.append({"section": "cta", "text": "도움이 됐다면 구독하고, 궁금한 점은 댓글로 남겨 주세요.", "visual": "구독",
+                   "image_prompt": "a smiling young Korean person waving at the camera in a bright cafe, shallow depth of field"})
     return {"title": f"{topic} {seconds}초 핵심 정리", "description": f"{topic}에 대해 꼭 알아야 할 내용을 짧게 정리했습니다.",
             "tags": [topic, "쇼츠", "이슈정리", f"{seconds}초정리"], "scenes": scenes}
 
@@ -257,7 +273,8 @@ def generate_script(topic: str, video_type: str = "shorts", seconds: int = 30, p
                 raise
             print(f"  ※ {provider} 대본 생성 실패 → 예시 대본으로 계속합니다: {e}")
             provider, data = "template", _template(topic, video_type, seconds, source_text)
-    scenes = [Scene(section=s.get("section", "body"), text=s["text"].strip(), visual=s.get("visual", ""))
+    scenes = [Scene(section=s.get("section", "body"), text=s["text"].strip(), visual=s.get("visual", ""),
+                    image_prompt=(s.get("image_prompt") or "").strip())
               for s in data["scenes"] if s.get("text", "").strip()]
     if not scenes:
         raise ValueError("대본 장면이 비어 있습니다.")

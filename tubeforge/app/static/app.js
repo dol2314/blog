@@ -227,10 +227,11 @@ async function renderProject(pid, step) {
   if (step === "result") return stepResult(pid, P, head);
 }
 
-/* 2단계: 대본 다듬기 */
+/* 2단계: 대본 다듬기 (+ 장면 이미지) */
 function stepScript(pid, P, head) {
-  const s = P.script;
-  let scenes = s.scenes.map(x => ({ section: x.section, text: x.text, visual: x.visual }));
+  const s = P.script, long = s.video_type === "long";
+  let scenes = s.scenes.map(x => ({ section: x.section, text: x.text, visual: x.visual, image_prompt: x.image_prompt || "", image: x.image || "" }));
+  const bust = Date.now();
   view().innerHTML = `${head}
   <div class="card">
     <div class="form-grid">
@@ -240,27 +241,40 @@ function stepScript(pid, P, head) {
     </div>
   </div>
   <div class="card section">
-    <div class="row" style="margin-bottom:6px"><h2 style="margin:0">장면별 대본</h2><span class="muted" id="total"></span><span class="spacer"></span><button class="btn ghost sm" id="addScene">＋ 장면 추가</button></div>
-    <p class="muted" style="margin:0 0 6px;font-size:13px">한 장면 = 1~2문장. 첫 장면(훅)에서 3초 안에 궁금하게 만들고, 마지막 장면에서 구독·댓글을 부탁하세요.</p>
+    <div class="row" style="margin-bottom:6px"><h2 style="margin:0">장면별 대본 · 이미지</h2><span class="muted" id="total"></span><span class="spacer"></span>
+      ${STATE.images_ready ? `<button class="btn sm" id="genAll">🎨 빈 장면 이미지 모두 만들기</button>` : ""}<button class="btn ghost sm" id="addScene">＋ 장면 추가</button></div>
+    <p class="muted" style="margin:0 0 6px;font-size:13px">한 장면 = 1~2문장. 첫 장면(훅)에서 3초 안에 궁금하게 만들고, 마지막 장면에서 구독·댓글을 부탁하세요.
+      ${STATE.images_ready ? `그림체: <b>${esc(STATE.image_styles[STATE.image_style] || STATE.image_style)}</b> (설정에서 변경)` : `<br>장면마다 AI 실사 이미지를 넣으려면 <a href="#/settings" style="color:var(--brand);font-weight:700">설정</a>에서 Google(Gemini) API 키를 넣으세요.`}</p>
+    <div id="imgStatus" hidden></div>
     <div id="scenes"></div>
   </div>
   <div class="row section"><button class="btn ghost" id="saveOnly">저장</button><span class="spacer"></span><button class="btn big" id="next">저장하고 목소리 고르기 →</button></div>`;
   const CPS = 6.8;
   const draw = () => {
     const total = scenes.reduce((a, x) => a + x.text.replace(/\s/g, "").length / CPS + 0.25, 0);
-    $("#total").textContent = `· ${scenes.length}장면 · 예상 ${Math.round(total)}초`;
+    const withImg = scenes.filter(x => x.image).length;
+    $("#total").textContent = `· ${scenes.length}장면 · 예상 ${Math.round(total)}초${STATE.images_ready ? ` · 이미지 ${withImg}/${scenes.length}` : ""}`;
     $("#scenes").innerHTML = scenes.map((x, i) => `
       <div class="scene">
         <div class="no">${i + 1}</div>
-        <select data-i="${i}" data-k="section"><option value="hook" ${x.section === "hook" ? "selected" : ""}>훅</option><option value="body" ${x.section === "body" ? "selected" : ""}>본문</option><option value="cta" ${x.section === "cta" ? "selected" : ""}>마무리(CTA)</option></select>
-        <textarea class="sec-${x.section}" data-i="${i}" data-k="text" rows="2">${esc(x.text)}</textarea>
+        <a class="sthumb ${long ? "long" : ""}" ${x.image ? `href="${fileUrl(pid, x.image, bust)}" target="_blank" title="크게 보기"` : ""}>${x.image ? `<img src="${fileUrl(pid, x.image, bust)}" alt="">` : "<span>이미지<br>없음</span>"}</a>
+        <div class="sbody">
+          <div class="row">
+            <select data-i="${i}" data-k="section" style="width:auto"><option value="hook" ${x.section === "hook" ? "selected" : ""}>훅</option><option value="body" ${x.section === "body" ? "selected" : ""}>본문</option><option value="cta" ${x.section === "cta" ? "selected" : ""}>마무리(CTA)</option></select>
+            <span class="info"><span>${x.text.replace(/\s/g, "").length}자 · 약 ${(x.text.replace(/\s/g, "").length / CPS).toFixed(1)}초</span>${x.visual ? ` · ${esc(x.visual)}` : ""}</span>
+            <span class="spacer"></span>
+            ${STATE.images_ready ? `<button class="btn ghost sm" data-gen="${i}">🎨 ${x.image ? "다시 만들기" : "이미지 만들기"}</button>` : ""}
+          </div>
+          <textarea class="sec-${x.section}" data-i="${i}" data-k="text" rows="2">${esc(x.text)}</textarea>
+          <details${x.image_prompt ? "" : " open"}><summary>이미지 묘사 (영어 · 고치면 그림이 바뀝니다)</summary>
+            <textarea data-i="${i}" data-k="image_prompt" rows="2" placeholder="예: close-up of hands adjusting a thermostat in a cozy Korean apartment, warm evening light">${esc(x.image_prompt)}</textarea></details>
+        </div>
         <div class="tools"><button data-a="up" data-i="${i}" title="위로">↑</button><button data-a="down" data-i="${i}" title="아래로">↓</button><button data-a="del" data-i="${i}" title="삭제">✕</button></div>
-        <div class="info"><span>${x.text.replace(/\s/g, "").length}자 · 약 ${(x.text.replace(/\s/g, "").length / CPS).toFixed(1)}초</span>${x.visual ? ` · 화면: ${esc(x.visual)}` : ""}</div>
       </div>`).join("");
     $$("#scenes [data-k]").forEach(el => el.oninput = el.onchange = () => {
       scenes[+el.dataset.i][el.dataset.k] = el.value;
       if (el.dataset.k === "section") draw();
-      else { const n = el.value.replace(/\s/g, "").length; el.parentElement.querySelector(".info span").textContent = `${n}자 · 약 ${(n / CPS).toFixed(1)}초`; }
+      else if (el.dataset.k === "text") { const n = el.value.replace(/\s/g, "").length; el.closest(".sbody").querySelector(".info span").textContent = `${n}자 · 약 ${(n / CPS).toFixed(1)}초`; }
     });
     $$("#scenes [data-a]").forEach(b => b.onclick = () => {
       const i = +b.dataset.i;
@@ -268,13 +282,36 @@ function stepScript(pid, P, head) {
       else { const j = b.dataset.a === "up" ? i - 1 : i + 1; if (j >= 0 && j < scenes.length) [scenes[i], scenes[j]] = [scenes[j], scenes[i]]; }
       draw();
     });
+    $$("#scenes [data-gen]").forEach(b => b.onclick = () => genImages([+b.dataset.gen], true));
   };
   draw();
-  $("#addScene").onclick = () => { scenes.splice(Math.max(0, scenes.length - 1), 0, { section: "body", text: "", visual: "" }); draw(); };
+  $("#addScene").onclick = () => { scenes.splice(Math.max(0, scenes.length - 1), 0, { section: "body", text: "", visual: "", image_prompt: "", image: "" }); draw(); };
   const save = async () => {
     const body = { title: $("#title").value, description: $("#desc").value, tags: $("#tags").value.split(","), scenes };
     await api(`/api/projects/${encodeURIComponent(pid)}/script`, { method: "PUT", body });
   };
+  const lock = on => $$("[data-gen], #genAll, #next").forEach(b => (b.disabled = on));
+  const genImages = async (indices, force) => {
+    const status = $("#imgStatus");
+    lock(true);
+    status.hidden = false;
+    status.innerHTML = `<div class="note" style="margin:6px 0 10px;background:var(--brand-soft);border-color:#d9d6ff;color:var(--ink)"><b id="imgMsg">🎨 이미지 만드는 중…</b>${barHtml(null)}</div>`;
+    try {
+      await save();
+      const job = await api(`/api/projects/${encodeURIComponent(pid)}/images`, { method: "POST", body: { indices, force } });
+      await watchJob(job, j => {
+        const failed = j.result.failed || [];
+        if (failed.length) toast(`장면 ${failed.map(f => f.scene).join(", ")} 실패: ${failed[0].error}`, true);
+        else toast("이미지를 만들었습니다");
+        route();
+      }, j => {
+        const m = $("#imgMsg"); if (m) m.textContent = `🎨 ${j.message}`;
+        const bar = status.querySelector(".bar"); if (bar && j.progress != null) bar.outerHTML = barHtml(j.progress);
+        if (j.status === "error") { status.innerHTML = `<div class="note">❌ ${esc(j.error)}</div>`; lock(false); }
+      });
+    } catch (e) { toast(e.message, true); status.hidden = true; lock(false); }
+  };
+  if ($("#genAll")) $("#genAll").onclick = () => genImages(null, false);
   $("#saveOnly").onclick = async () => { try { await save(); toast("저장했습니다"); } catch (e) { toast(e.message, true); } };
   $("#next").onclick = async () => { try { await save(); location.hash = `#/p/${encodeURIComponent(pid)}/voice`; } catch (e) { toast(e.message, true); } };
 }
@@ -296,6 +333,7 @@ function stepVoice(pid, P, head) {
   </div>
   <div class="card section">
     <h2>배경</h2>
+    ${P.script.scenes.some(x => x.image) ? `<div class="note" style="margin-bottom:10px;background:#e6f7f0;border-color:#bfe8d6;color:#0b5e40">🎨 AI 장면 이미지가 있는 장면은 그 이미지를 씁니다. 아래 배경은 이미지가 없는 장면에만 쓰입니다.</div>` : STATE.images_ready ? `<div class="note" style="margin-bottom:10px">「영상 만들기」를 누르면 비어 있는 장면 이미지를 먼저 자동으로 만듭니다 (배경을 직접 고르면 건너뜀).</div>` : ""}
     <p class="muted" style="margin:-6px 0 10px;font-size:13px">이미지·영상을 고르면 장면마다 돌아가며 쓰고, 고르지 않으면 장면마다 색이 다른 그라데이션을 만듭니다. 저작권이 확인된 소재만 쓰세요.</p>
     <div class="assets" id="bgList"></div>
     <label class="btn ghost sm section" style="display:inline-flex">＋ 배경 올리기<input type="file" id="bgFile" accept="image/*,video/*" hidden></label>
@@ -432,11 +470,13 @@ async function renderSettings() {
   const field = it => {
     if (it.key === "SCRIPT_PROVIDER") return `<select name="${it.key}">${Object.entries(PROVIDERS).map(([k, v]) => `<option value="${k}" ${k === it.value ? "selected" : ""}>${v}</option>`).join("")}</select>`;
     if (it.key === "TTS_ENGINE") return `<select name="${it.key}">${[["edge", "Edge 무료 음성"], ["elevenlabs", "ElevenLabs (유료)"], ["dummy", "무음 테스트"]].map(([k, v]) => `<option value="${k}" ${k === it.value ? "selected" : ""}>${v}</option>`).join("")}</select>`;
+    if (it.key === "IMAGE_STYLE") return `<select name="${it.key}">${Object.entries(STATE.image_styles).map(([k, v]) => `<option value="${k}" ${k === it.value ? "selected" : ""}>${esc(v)}</option>`).join("")}</select>`;
     if (it.key === "EDGE_VOICE") return `<select name="${it.key}">${STATE.voices.map(v => `<option value="${v.id}" ${v.id === it.value ? "selected" : ""}>${esc(v.label)}</option>`).join("")}</select>`;
     if (it.secret) return `<input type="password" name="${it.key}" placeholder="${it.set ? "저장됨 · 바꿀 때만 입력" : "입력하세요"}" autocomplete="off">`;
     return `<input type="text" name="${it.key}" value="${esc(it.value)}">`;
   };
   const groups = [["대본 AI", ["SCRIPT_PROVIDER", "ANTHROPIC_API_KEY", "CLAUDE_MODEL", "OPENAI_API_KEY", "OPENAI_MODEL", "OLLAMA_HOST", "OLLAMA_MODEL"]],
+    ["장면 이미지 (Google)", ["GEMINI_API_KEY", "GEMINI_IMAGE_MODEL", "IMAGE_STYLE"]],
     ["목소리", ["TTS_ENGINE", "EDGE_VOICE", "EDGE_RATE", "ELEVENLABS_API_KEY", "ELEVENLABS_VOICE_ID"]],
     ["영상", ["BGM_VOLUME", "BGM_DUCK_VOLUME", "FONT_PATH"]]];
   const byKey = Object.fromEntries(items.map(i => [i.key, i]));

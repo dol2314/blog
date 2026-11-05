@@ -9,6 +9,9 @@ edge-tts>=7.0          # 무료 한국어 TTS (API 키 불필요)
 anthropic>=0.70
 openai>=1.50
 
+# 장면 이미지 (Google Gemini / Imagen)
+google-genai>=1.30
+
 # 유튜브 업로드
 google-api-python-client>=2.140
 google-auth-oauthlib>=1.2

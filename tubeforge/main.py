@@ -31,6 +31,10 @@ def parse_args(argv=None):
     p.add_argument("--rate", help="말하기 속도 (예: +15%%, -5%%)")
     p.add_argument("--bg", help="배경 이미지/영상 파일 또는 폴더 (없으면 그라데이션 자동)")
     p.add_argument("--bgm", help="배경음악 파일 (말할 때 자동으로 작아짐)")
+    p.add_argument("--images", dest="images", action="store_true", default=None,
+                   help="장면마다 Google AI 이미지 만들기 (기본: GEMINI_API_KEY 가 있고 --bg 가 없으면 자동)")
+    p.add_argument("--no-images", dest="images", action="store_false", help="AI 이미지 만들지 않기")
+    p.add_argument("--style", help="이미지 그림체: photo(실사, 기본) | cinematic | webtoon | 3d")
     p.add_argument("--out", help="결과 폴더 (기본 output/<날짜_주제>)")
     p.add_argument("--script-only", action="store_true", help="대본만 만들고 멈추기")
     p.add_argument("--preset", default="veryfast", help="x264 프리셋 (ultrafast~slow)")
@@ -81,7 +85,13 @@ def main(argv=None) -> Path:
 
     # 2) 음성 + 3) 영상
     t0 = step("음성 합성 · 영상 렌더링")
-    result = pipeline.render(script, out, a.tts, a.voice, a.rate, a.bg, a.bgm, a.preset, say, cli=True)
+    if a.style:
+        import os
+
+        os.environ["IMAGE_STYLE"] = a.style
+    result = pipeline.render(script, out, a.tts, a.voice, a.rate, a.bg, a.bgm, a.preset, say, cli=True, images=a.images)
+    for err in result["image_errors"]:
+        print(f"  ※ 장면 {err['scene']} 이미지 실패: {err['error']}")
     print(f"  길이 {result['duration']:.1f}초 · {time.time() - t0:.1f}초")
 
     # 4) 업로드

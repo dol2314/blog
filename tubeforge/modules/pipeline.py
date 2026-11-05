@@ -88,27 +88,48 @@ def make_script(topic: str, video_type: str = "shorts", seconds: int = 30, provi
     return script, out
 
 
+def make_images(script: VideoScript, out: Path, indices: list[int] | None = None, force: bool = False,
+                style: str | None = None, progress: Progress = _noop) -> list[dict]:
+    """장면 이미지(Google)를 만들고 대본에 경로를 저장한다. 실패한 장면은 오류 문구와 함께 돌려준다."""
+    from .image_generator import generate_scene_images
+
+    results = generate_scene_images(script, out, style=style, indices=indices, force=force, progress=progress)
+    save_script(script, out)
+    failed = [{"scene": r.index + 1, "error": r.error} for r in results if not r.path]
+    save_meta(out, images=sum(1 for sc in script.scenes if sc.image and (out / sc.image).exists()))
+    return failed
+
+
 def render(script: VideoScript, out: Path, tts: str | None = None, voice: str | None = None,
            rate: str | None = None, bg: str | None = None, bgm: str | None = None, preset: str = "veryfast",
-           progress: Progress = _noop, cli: bool = False) -> dict:
-    """음성 → 자막 → 영상 → 썸네일. 결과 파일 경로를 돌려준다."""
+           progress: Progress = _noop, cli: bool = False, images: bool | None = None) -> dict:
+    """(장면 이미지) → 음성 → 자막 → 영상 → 썸네일. 결과 파일 경로를 돌려준다.
+    images=None 이면 Google API 키가 있을 때만 빠진 장면 이미지를 먼저 만든다."""
+    from .image_generator import image_available
     from .tts_engine import get_engine, write_srt
     from .video_composer import compose_video, make_thumbnail
 
+    image_errors: list[dict] = []
+    if images or (images is None and image_available() and not bg):
+        image_errors = make_images(script, out, progress=lambda m, f=None: progress(m, None if f is None else 0.02 + 0.2 * f))
+        if image_errors:
+            progress(f"이미지 {len(image_errors)}장은 만들지 못해 기본 배경으로 대신합니다.", None)
     engine = get_engine(tts, voice, rate)
-    progress(f"음성 만드는 중… ({engine.name})", 0.02)
+    progress(f"음성 만드는 중… ({engine.name})", 0.24)
     voice_res = engine.synthesize(script.scenes, out / "audio",
                                   max_chars=16 if script.video_type == "shorts" else 28)
     write_srt(voice_res.cues, out / "captions.srt")
     save_script(script, out)  # 실제 음성 길이로 타임스탬프 갱신
-    progress(f"영상 렌더링 중… (길이 {voice_res.duration:.0f}초)", 0.15)
-    logger = "bar" if cli else _RenderLogger(lambda f: progress("영상 렌더링 중…", 0.15 + 0.8 * f))
-    video = compose_video(script, voice_res, out / "final.mp4", bg=bg, bgm=bgm, preset=preset, logger=logger)
-    thumb = make_thumbnail(script, out / "thumbnail.jpg", bg=bg)
+    progress(f"영상 렌더링 중… (길이 {voice_res.duration:.0f}초)", 0.32)
+    logger = "bar" if cli else _RenderLogger(lambda f: progress("영상 렌더링 중…", 0.32 + 0.65 * f))
+    video = compose_video(script, voice_res, out / "final.mp4", bg=bg, bgm=bgm, preset=preset, logger=logger,
+                          project_dir=out)
+    thumb = make_thumbnail(script, out / "thumbnail.jpg", bg=bg, project_dir=out)
     save_meta(out, stage="rendered", duration=round(voice_res.duration, 1), tts=engine.name,
               voice=getattr(engine, "voice", None), bg=bg, bgm=bgm)
     progress("완성!", 1.0)
-    return {"video": video, "thumbnail": thumb, "captions": out / "captions.srt", "duration": voice_res.duration}
+    return {"video": video, "thumbnail": thumb, "captions": out / "captions.srt", "duration": voice_res.duration,
+            "image_errors": image_errors}
 
 
 def upload(script: VideoScript, out: Path, privacy: str = "private", publish_at: str | None = None,

@@ -71,32 +71,50 @@ def cover(img: Image.Image, size: tuple[int, int]) -> Image.Image:
     return img.crop((x, y, x + w, y + h))
 
 
-def image_clip_kenburns(img: Image.Image, size: tuple[int, int], duration: float, zoom: float = 0.06):
-    """정지 이미지를 천천히 확대하는 클립. 프레임마다 numpy 로 잘라서 빠르게 만든다."""
+MOTIONS = ["in", "pan_right", "out", "pan_left", "up"]
+
+
+def image_clip_kenburns(img: Image.Image, size: tuple[int, int], duration: float, zoom: float = 0.08,
+                        motion: str = "in"):
+    """정지 이미지에 천천히 움직이는 카메라 효과를 준다 (줌인·줌아웃·좌우·위로 이동).
+    프레임마다 numpy 로 잘라 크기만 바꾸므로 빠르다."""
     from moviepy import VideoClip
 
     w, h = size
     big = np.asarray(cover(img, (int(w * (1 + zoom)), int(h * (1 + zoom)))).convert("RGB"))
     bh, bw = big.shape[:2]
+    full = (0.0, 0.0, float(bw), float(bh))                       # 전체 (가장 넓게)
+    cw, ch = bw / (1 + zoom), bh / (1 + zoom)                      # 화면 크기만큼
+    center = ((bw - cw) / 2, (bh - ch) / 2, cw, ch)
+    plans = {
+        "in": (full, center),
+        "out": (center, full),
+        "pan_right": ((0.0, (bh - ch) / 2, cw, ch), (bw - cw, (bh - ch) / 2, cw, ch)),
+        "pan_left": ((bw - cw, (bh - ch) / 2, cw, ch), (0.0, (bh - ch) / 2, cw, ch)),
+        "up": (((bw - cw) / 2, bh - ch, cw, ch), ((bw - cw) / 2, 0.0, cw, ch)),
+    }
+    a, b = plans.get(motion, plans["in"])
 
     def frame(t):
-        # 처음엔 전체(살짝 넓게) → 끝에는 원래 크기만큼 잘라 보여 줌 = 천천히 줌인
-        k = 1 + zoom * min(1.0, t / max(duration, 0.01))
-        cw, ch = min(bw, int(bw / k)), min(bh, int(bh / k))
-        x, y = (bw - cw) // 2, (bh - ch) // 2
-        crop = Image.fromarray(big[y:y + ch, x:x + cw])
+        u = min(1.0, max(0.0, t / max(duration, 0.01)))
+        u = u * u * (3 - 2 * u)  # 부드럽게 시작·끝
+        x, y, cw_, ch_ = (a[k] + (b[k] - a[k]) * u for k in range(4))
+        x0, y0 = int(round(x)), int(round(y))
+        x1, y1 = min(bw, x0 + int(round(cw_))), min(bh, y0 + int(round(ch_)))
+        crop = Image.fromarray(big[y0:y1, x0:x1])
         return np.asarray(crop.resize((w, h), Image.BILINEAR))
 
     return VideoClip(frame, duration=duration)
 
 
-def background_clip(path: Path | None, size: tuple[int, int], duration: float, seed: int):
+def background_clip(path: Path | None, size: tuple[int, int], duration: float, seed: int, motion: str = "in"):
     from moviepy import VideoFileClip, vfx
 
     if path is None:
-        return image_clip_kenburns(gradient_background(size, seed), size, duration)
+        return image_clip_kenburns(gradient_background(size, seed), size, duration, motion=motion)
     if path.suffix.lower() in IMAGE_EXT:
-        return image_clip_kenburns(Image.open(path), size, duration)
+        with Image.open(path) as im:
+            return image_clip_kenburns(im.convert("RGB"), size, duration, motion=motion)
     clip = VideoFileClip(str(path), audio=False)
     w, h = size
     s = max(w / clip.w, h / clip.h)
@@ -193,7 +211,7 @@ class Layer:
 
 def compose_video(script: VideoScript, tts: TTSResult, out_path: Path, bg: str | None = None,
                   bgm: str | None = None, preset: str = "veryfast", show_title: bool = True,
-                  logger="bar") -> Path:
+                  logger="bar", project_dir: Path | None = None) -> Path:
     """logger: moviepy(proglog) 진행 표시. "bar"=터미널 막대, None=조용히, 또는 ProgressBarLogger 객체."""
     from bisect import bisect_right
 
@@ -210,9 +228,14 @@ def compose_video(script: VideoScript, tts: TTSResult, out_path: Path, bg: str |
     bg_clips = []
     for i, sc in enumerate(script.scenes):
         end = script.scenes[i + 1].start if i + 1 < len(script.scenes) else duration
-        src = backgrounds[i % len(backgrounds)] if backgrounds else None
+        scene_img = project_dir / sc.image if project_dir and sc.image else None
+        if scene_img and scene_img.exists():  # AI 장면 이미지가 1순위
+            src = scene_img
+        else:
+            src = backgrounds[i % len(backgrounds)] if backgrounds else None
         bg_clips.append(background_clip(src, size, max(0.1, end - sc.start),
-                                        seed=zlib.crc32(f"{script.topic}-{i}".encode())))
+                                        seed=zlib.crc32(f"{script.topic}-{i}".encode()),
+                                        motion=MOTIONS[i % len(MOTIONS)]))
     base = concatenate_videoclips(bg_clips, method="chain")
 
     # 2) 고정 레이어: 아래쪽 어둡게(자막 가독성) + 상단 제목(쇼츠)
@@ -262,11 +285,14 @@ def compose_video(script: VideoScript, tts: TTSResult, out_path: Path, bg: str |
     return out_path
 
 
-def make_thumbnail(script: VideoScript, out_path: Path, bg: str | None = None) -> Path:
-    """첫 장면 배경 + 큰 제목으로 썸네일(JPG)을 만든다. 롱폼은 1280x720."""
+def make_thumbnail(script: VideoScript, out_path: Path, bg: str | None = None,
+                   project_dir: Path | None = None) -> Path:
+    """첫 장면 그림(AI 이미지 → 고른 배경 → 그라데이션) + 큰 제목으로 썸네일(JPG). 롱폼은 1280x720."""
     size = (1080, 1920) if script.video_type == "shorts" else (1280, 720)
-    backgrounds = list_backgrounds(bg)
-    src = next((p for p in backgrounds if p.suffix.lower() in IMAGE_EXT), None)
+    scene_imgs = [project_dir / sc.image for sc in script.scenes if project_dir and sc.image] if project_dir else []
+    src = next((p for p in scene_imgs if p.exists()), None)
+    if src is None:
+        src = next((p for p in list_backgrounds(bg) if p.suffix.lower() in IMAGE_EXT), None)
     img = cover(Image.open(src), size) if src else gradient_background(size, 7)
     img = img.convert("RGBA")
     font = find_font()
